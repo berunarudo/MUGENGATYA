@@ -531,7 +531,9 @@ select {
 
   .center-panel {
     grid-area: center;
-    min-height: 720px;
+    height: 58vh;
+    min-height: 420px;
+    max-height: 720px;
   }
 
   .game-footer {
