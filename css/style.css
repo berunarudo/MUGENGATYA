@@ -41,7 +41,6 @@ body {
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-  grid-column: 1 / -1;
 }
 
 .long-press-status {
@@ -138,10 +137,24 @@ body {
 
 .side-panel.is-collapsed {
   min-height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 .side-panel.is-collapsed .panel-header {
-  margin-bottom: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.side-panel.is-collapsed .panel-header h2 {
+  display: none;
+}
+
+.side-panel.is-collapsed .panel-toggle-button {
+  width: 100%;
+  margin: 0;
 }
 
 .probability-list,
@@ -491,39 +504,42 @@ select {
 
 @media (max-width: 920px) {
   .game-shell {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "header"
+      "probability"
+      "center"
+      "footer"
+      "status";
     height: auto;
     min-height: 0;
     max-height: none;
   }
 
   .game-layout {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto auto auto auto;
+    display: contents;
   }
 
-  .center-panel {
-    min-height: 720px;
+  .game-header {
+    grid-area: header;
   }
 
   .probability-panel {
-    grid-row: 1;
+    grid-area: probability;
   }
 
   .center-panel {
-    grid-row: 2;
+    grid-area: center;
+    min-height: 720px;
   }
 
   .game-footer {
-    grid-row: 3;
+    grid-area: footer;
   }
 
   .status-panel {
-    grid-row: 4;
-  }
-
-  .side-panel.is-collapsed {
-    padding-top: 10px;
-    padding-bottom: 10px;
+    grid-area: status;
   }
 
   .description-list {
