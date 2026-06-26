@@ -561,6 +561,13 @@ select {
   }
 
   .battle-log-body {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+  }
+
+  .battle-log-body {
     overscroll-behavior: contain;
   }
 
