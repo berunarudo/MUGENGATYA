@@ -14,9 +14,14 @@
     </header>
 
     <section class="game-layout">
-      <aside class="panel side-panel">
-        <h2>出現率</h2>
-        <div id="probability-list" class="probability-list"></div>
+      <aside id="probability-panel" class="panel side-panel probability-panel">
+        <div class="panel-header">
+          <h2>出現率</h2>
+          <button type="button" id="toggle-probability-panel" class="panel-toggle-button" aria-expanded="true">閉じる</button>
+        </div>
+        <div id="probability-panel-body" class="panel-body">
+          <div id="probability-list" class="probability-list"></div>
+        </div>
       </aside>
 
       <section class="panel center-panel">
@@ -27,49 +32,54 @@
         <div id="center-view" class="center-view" aria-live="polite"></div>
       </section>
 
-      <aside class="panel side-panel">
-        <h2>所持情報</h2>
-        <dl class="status-box">
-          <div class="status-row">
-            <dt>石</dt>
-            <dd id="stone-count">0</dd>
-          </div>
-          <div class="status-row">
-            <dt>次の回復</dt>
-            <dd id="recovery-timer">10.0秒</dd>
-          </div>
-          <div class="status-row">
-            <dt>総ガチャ回数</dt>
-            <dd id="total-gacha-count">0</dd>
-          </div>
-          <div class="status-row">
-            <dt>総ハズレ回数</dt>
-            <dd id="total-miss-count">0</dd>
-          </div>
-          <div class="status-row">
-            <dt>総バグ撃破数</dt>
-            <dd id="total-bug-defeats">0</dd>
-          </div>
-        </dl>
+      <aside id="status-panel" class="panel side-panel status-panel">
+        <div class="panel-header">
+          <h2>所持情報</h2>
+          <button type="button" id="toggle-status-panel" class="panel-toggle-button" aria-expanded="true">閉じる</button>
+        </div>
+        <div id="status-panel-body" class="panel-body">
+          <dl class="status-box">
+            <div class="status-row">
+              <dt>石</dt>
+              <dd id="stone-count">0</dd>
+            </div>
+            <div class="status-row">
+              <dt>次の回復</dt>
+              <dd id="recovery-timer">10.0秒</dd>
+            </div>
+            <div class="status-row">
+              <dt>総ガチャ回数</dt>
+              <dd id="total-gacha-count">0</dd>
+            </div>
+            <div class="status-row">
+              <dt>総ハズレ回数</dt>
+              <dd id="total-miss-count">0</dd>
+            </div>
+            <div class="status-row">
+              <dt>総バグ撃破数</dt>
+              <dd id="total-bug-defeats">0</dd>
+            </div>
+          </dl>
 
-        <div class="menu-box">
-          <h3>メニュー</h3>
-          <button type="button" class="menu-button js-menu-button" data-menu="relics">遺物</button>
-          <button type="button" class="menu-button js-menu-button" data-menu="status">ステータス</button>
-          <button type="button" class="menu-button js-menu-button" data-menu="altar">祭壇</button>
-          <button type="button" class="menu-button js-menu-button" data-menu="decompose">分解</button>
-          <button type="button" class="menu-button js-menu-button" data-menu="achievements">実績</button>
-          <button type="button" class="menu-button js-menu-button" data-menu="settings">設定</button>
+          <div class="menu-box">
+            <h3>メニュー</h3>
+            <button type="button" class="menu-button js-menu-button" data-menu="relics">遺物</button>
+            <button type="button" class="menu-button js-menu-button" data-menu="status">ステータス</button>
+            <button type="button" class="menu-button js-menu-button" data-menu="altar">祭壇</button>
+            <button type="button" class="menu-button js-menu-button" data-menu="decompose">分解</button>
+            <button type="button" class="menu-button js-menu-button" data-menu="achievements">実績</button>
+            <button type="button" class="menu-button js-menu-button" data-menu="settings">設定</button>
+          </div>
         </div>
       </aside>
-    </section>
 
-    <footer class="game-footer">
-      <button type="button" id="gacha-button" class="primary-button">ガチャを引く</button>
-      <div id="long-press-status" class="long-press-status">万里の遺物: 未所持 / 長押し無効</div>
-      <div id="batch-draw-buttons" class="batch-draw-buttons"></div>
-      <button type="button" id="reset-button" class="reset-button">データリセット</button>
-    </footer>
+      <footer class="game-footer">
+        <button type="button" id="gacha-button" class="primary-button">ガチャを引く</button>
+        <div id="long-press-status" class="long-press-status">万里の遺物: 未所持 / 長押し無効</div>
+        <div id="batch-draw-buttons" class="batch-draw-buttons"></div>
+        <button type="button" id="reset-button" class="reset-button">データリセット</button>
+      </footer>
+    </section>
   </main>
 
   <script src="js/data.js"></script>
@@ -87,4 +97,3 @@
   <script src="js/main.js"></script>
 </body>
 </html>
-

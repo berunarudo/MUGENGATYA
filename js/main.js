@@ -28,6 +28,10 @@
       sort: "category"
     }
   };
+  var chromeState = {
+    probabilityPanelCollapsed: false,
+    statusPanelCollapsed: false
+  };
   var longPressState = {
     pointerDown: false,
     isActive: false,
@@ -432,6 +436,29 @@
     persistAndRender();
   }
 
+  function updateCollapsiblePanel(panelKey, collapsed) {
+    var panelId = panelKey === "probability" ? "probability-panel" : "status-panel";
+    var buttonId = panelKey === "probability" ? "toggle-probability-panel" : "toggle-status-panel";
+    var panel = document.getElementById(panelId);
+    var button = document.getElementById(buttonId);
+    if (!panel || !button) {
+      return;
+    }
+    panel.classList.toggle("is-collapsed", collapsed);
+    button.textContent = collapsed ? "開く" : "閉じる";
+    button.setAttribute("aria-expanded", collapsed ? "false" : "true");
+  }
+
+  function toggleCollapsiblePanel(panelKey) {
+    if (panelKey === "probability") {
+      chromeState.probabilityPanelCollapsed = !chromeState.probabilityPanelCollapsed;
+      updateCollapsiblePanel(panelKey, chromeState.probabilityPanelCollapsed);
+      return;
+    }
+    chromeState.statusPanelCollapsed = !chromeState.statusPanelCollapsed;
+    updateCollapsiblePanel(panelKey, chromeState.statusPanelCollapsed);
+  }
+
   function toggleRelicEnabled(relicId) {
     if (relicId === "altar_zero_relic") {
       state.zeroRelicState.enabled = !state.zeroRelicState.enabled;
@@ -700,6 +727,12 @@
     document.getElementById("center-view").addEventListener("click", handleCenterViewClick);
     document.getElementById("center-view").addEventListener("change", handleCenterViewChange);
     document.getElementById("center-back-button").addEventListener("click", handleBackToLog);
+    document.getElementById("toggle-probability-panel").addEventListener("click", function () {
+      toggleCollapsiblePanel("probability");
+    });
+    document.getElementById("toggle-status-panel").addEventListener("click", function () {
+      toggleCollapsiblePanel("status");
+    });
 
     Array.prototype.forEach.call(document.querySelectorAll(".js-menu-button"), function (button) {
       button.addEventListener("click", handleMenuClick);
@@ -720,6 +753,8 @@
 
   function init() {
     bindEvents();
+    updateCollapsiblePanel("probability", chromeState.probabilityPanelCollapsed);
+    updateCollapsiblePanel("status", chromeState.statusPanelCollapsed);
     refreshAchievements();
     applyStoneRecovery();
     persistAndRender();

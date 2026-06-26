@@ -41,6 +41,7 @@ body {
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+  grid-column: 1 / -1;
 }
 
 .long-press-status {
@@ -92,6 +93,16 @@ body {
   min-height: 0;
 }
 
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid #4e4e4e;
+  padding-bottom: 6px;
+}
+
 .panel h2,
 .panel h3 {
   margin: 0 0 10px;
@@ -101,12 +112,36 @@ body {
   padding-bottom: 6px;
 }
 
+.panel-header h2 {
+  margin: 0;
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
 .side-panel,
 .center-panel {
   display: flex;
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
+}
+
+.panel-body {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.side-panel.is-collapsed .panel-body {
+  display: none;
+}
+
+.side-panel.is-collapsed {
+  min-height: auto;
+}
+
+.side-panel.is-collapsed .panel-header {
+  margin-bottom: 0;
 }
 
 .probability-list,
@@ -212,6 +247,7 @@ body {
 .menu-button,
 .primary-button,
 .reset-button,
+.panel-toggle-button,
 .toggle-button,
 .back-button,
 .mini-button,
@@ -229,6 +265,7 @@ select {
 .menu-button,
 .primary-button,
 .reset-button,
+.panel-toggle-button,
 .toggle-button,
 .back-button,
 .mini-button {
@@ -249,6 +286,7 @@ select {
   margin-bottom: 8px;
 }
 
+.panel-toggle-button,
 .toggle-button,
 .back-button,
 .mini-button,
@@ -430,6 +468,7 @@ select {
 .menu-button:hover,
 .primary-button:hover,
 .reset-button:hover,
+.panel-toggle-button:hover,
 .toggle-button:hover,
 .back-button:hover,
 .mini-button:hover,
@@ -441,6 +480,7 @@ select {
 .menu-button:disabled,
 .primary-button:disabled,
 .reset-button:disabled,
+.panel-toggle-button:disabled,
 .toggle-button:disabled,
 .back-button:disabled,
 .mini-button:disabled,
@@ -458,10 +498,32 @@ select {
 
   .game-layout {
     grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto auto;
   }
 
   .center-panel {
     min-height: 720px;
+  }
+
+  .probability-panel {
+    grid-row: 1;
+  }
+
+  .center-panel {
+    grid-row: 2;
+  }
+
+  .game-footer {
+    grid-row: 3;
+  }
+
+  .status-panel {
+    grid-row: 4;
+  }
+
+  .side-panel.is-collapsed {
+    padding-top: 10px;
+    padding-bottom: 10px;
   }
 
   .description-list {
