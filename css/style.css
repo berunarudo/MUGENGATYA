@@ -536,6 +536,18 @@ select {
     max-height: 720px;
   }
 
+  .center-view {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .log-stream,
+  .battle-layout,
+  .battle-log-frame,
+  .battle-log-body {
+    min-height: 0;
+  }
+
   .game-footer {
     grid-area: footer;
   }
