@@ -557,6 +557,8 @@ select {
   }
 
   .battle-log-frame {
+    flex: 1 0 180px;
+    min-height: 180px;
     overflow: hidden;
   }
 
@@ -569,6 +571,10 @@ select {
 
   .battle-log-body {
     overscroll-behavior: contain;
+  }
+
+  .battle-chip {
+    white-space: normal;
   }
 
   .game-footer {
