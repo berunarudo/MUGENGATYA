@@ -541,6 +541,7 @@ select {
     flex-direction: column;
     flex: 1 1 auto;
     min-height: 0;
+    overflow: hidden;
   }
 
   .log-stream,
@@ -557,6 +558,10 @@ select {
 
   .battle-log-frame {
     overflow: hidden;
+  }
+
+  .battle-log-body {
+    overscroll-behavior: contain;
   }
 
   .game-footer {
