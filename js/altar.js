@@ -13,6 +13,17 @@
     }
   }
 
+  function getDiscountedCost(baseCost, state) {
+    return effects.applyShopDiscount(baseCost, state);
+  }
+
+  function pushDiscountLog(logs, baseCost, finalCost, state) {
+    var discountRate = effects.calculateShopDiscountRate(state);
+    if (finalCost < baseCost && discountRate > 0) {
+      logs.push("SSR割引の遺物により、価格が" + Math.round(discountRate * 100) + "%減少した。");
+    }
+  }
+
   function getAltarEventCost(type) {
     return (data.ALTAR_EVENT_CONFIG[type] || data.ALTAR_EVENT_CONFIG.normal).cost;
   }
@@ -91,6 +102,7 @@
 
   function startAltarEvent(state, type) {
     var cost;
+    var baseCost;
     var event;
     var magnitude;
 
@@ -100,7 +112,8 @@
       return { ok: false, logs: ["すでに祭壇イベントが発動中です。"] };
     }
 
-    cost = getAltarEventCost(type);
+    baseCost = getAltarEventCost(type);
+    cost = getDiscountedCost(baseCost, state);
     if (state.stones < cost) {
       return { ok: false, logs: ["石が足りません。必要石：" + cost.toLocaleString("ja-JP")] };
     }
@@ -122,17 +135,25 @@
     return {
       ok: true,
       logs: [
+        (function () {
+          var entries = [];
+          pushDiscountLog(entries, baseCost, cost, state);
+          return entries;
+        })()[0] || null,
         "石を" + cost.toLocaleString("ja-JP") + "個捧げた。",
         type === "normal" ? "祭壇の奥で、確率が焼けた。" : (type === "super" ? "祭壇の奥で、確率が強く揺れた。" : "祭壇の奥で、確率そのものが軋んだ。"),
         data.ALTAR_EVENT_CONFIG[type].label + "発動。",
         Math.floor(getAltarEventDuration(type) / 60000) + "分間、" + event.effectName + "が" + magnitude + "になります。"
-      ]
+      ].filter(Boolean)
     };
   }
 
   function obtainAltarRelic(state, relicId) {
     var relic;
     var logs;
+    var owned;
+    var cost;
+    var baseCost;
 
     ensureAltarState(state);
 
@@ -140,15 +161,20 @@
     if (!relic || relic.obtainType !== "altar_only") {
       return { ok: false, logs: ["祭壇ではその遺物を扱えません。"] };
     }
-    if (state.ownedRelics[relicId]) {
+    owned = state.ownedRelics[relicId];
+    if (owned && relic.limitBreakable === false) {
       return { ok: false, logs: [relic.name + "はすでに所持しています。", "この遺物は凸できません。"] };
     }
-    if (state.stones < relic.altarCost) {
-      return { ok: false, logs: ["石が足りません。必要石：" + relic.altarCost.toLocaleString("ja-JP")] };
+    baseCost = relic.altarCost || 0;
+    cost = getDiscountedCost(baseCost, state);
+    if (state.stones < cost) {
+      return { ok: false, logs: ["石が足りません。必要石：" + cost.toLocaleString("ja-JP")] };
     }
 
-    state.stones -= relic.altarCost;
-    logs = ["石を" + relic.altarCost.toLocaleString("ja-JP") + "個捧げた。"];
+    state.stones -= cost;
+    logs = [];
+    pushDiscountLog(logs, baseCost, cost, state);
+    logs.push("石を" + cost.toLocaleString("ja-JP") + "個捧げた。");
 
     if (relicId === "altar_ssr_long_press") {
       logs.push("祭壇の奥から、果ての見えない道が伸びた。");
@@ -156,6 +182,8 @@
       logs.push("祭壇の奥から遺物が現れた。");
     } else if (relicId === "altar_lr_multi_100") {
       logs.push("祭壇の奥で世界が回転した。");
+    } else if (relicId === "altar_lr_auto_start") {
+      logs.push(owned ? "祭壇の奥で、誰も触れていないボタンが再び沈んだ。" : "祭壇の奥で、誰も触れていないボタンが沈んだ。");
     } else {
       logs.push("祭壇の奥で、無数の世界が重なった。");
     }
@@ -169,6 +197,8 @@
       logs.push("10連ガチャが解放されました。");
     } else if (relicId === "altar_lr_multi_100") {
       logs.push("100連ガチャが解放されました。");
+    } else if (relicId === "altar_lr_auto_start") {
+      logs.push(owned ? "LR自動起動の遺物が再起動した。" : "自動起動が解放されました。");
     } else {
       logs.push("全石ガチャが解放されました。");
     }
@@ -193,14 +223,16 @@
 
   function buyZeroRelic(state) {
     var zeroRelic = state.zeroRelicState || data.createZeroRelicState();
+    var baseCost = 100000;
+    var cost = getDiscountedCost(baseCost, state);
     if (zeroRelic.purchasedThisLife) {
       return { ok: false, logs: ["この周回では、すでに0の遺物を購入しています。", "転生後、再び購入できるようになります。"] };
     }
-    if (state.stones < 100000) {
-      return { ok: false, logs: ["石が足りません。必要石：100,000"] };
+    if (state.stones < cost) {
+      return { ok: false, logs: ["石が足りません。必要石：" + cost.toLocaleString("ja-JP")] };
     }
 
-    state.stones -= 100000;
+    state.stones -= cost;
     zeroRelic.owned = true;
     zeroRelic.enabled = true;
     zeroRelic.count = Math.max(0, zeroRelic.count || 0) + 1;
@@ -213,12 +245,15 @@
 
     return {
       ok: true,
-      logs: [
-        "石を100,000個捧げた。",
-        "祭壇の奥に、0が浮かび上がった。",
-        zeroRelic.count === 1 ? "0の遺物を獲得した。" : "0の遺物が重なった。",
-        zeroRelic.count === 1 ? "転生時、素の確率が強化されるようになった。" : ("0の遺物が" + zeroRelic.limitBreak + "凸になった。")
-      ]
+      logs: (function () {
+        var entries = [];
+        pushDiscountLog(entries, baseCost, cost, state);
+        entries.push("石を" + cost.toLocaleString("ja-JP") + "個捧げた。");
+        entries.push("祭壇の奥に、0が浮かび上がった。");
+        entries.push(zeroRelic.count === 1 ? "0の遺物を獲得した。" : "0の遺物が重なった。");
+        entries.push(zeroRelic.count === 1 ? "転生時、素の確率が強化されるようになった。" : ("0の遺物が" + zeroRelic.limitBreak + "凸になった。"));
+        return entries;
+      })()
     };
   }
 
@@ -279,18 +314,22 @@
   }
 
   function executeRebirth(state) {
+    var baseCost = 10000;
+    var cost = getDiscountedCost(baseCost, state);
     if (state.isBattle) {
       return { ok: false, logs: ["戦闘中は転生できません。"] };
     }
-    if (state.stones < 10000) {
-      return { ok: false, logs: ["石が足りません。必要石：10,000"] };
+    if (state.stones < cost) {
+      return { ok: false, logs: ["石が足りません。必要石：" + cost.toLocaleString("ja-JP")] };
     }
 
+    state.stones -= cost;
     var hasZeroRelic = Boolean(state.zeroRelicState && state.zeroRelicState.owned);
     var message = hasZeroRelic
       ? "転生します。\n通常データは初期化されます。\n無限の遺物、0の遺物、スライムの遺物、実績、図鑑、累計記録は保存されます。\n本当に転生しますか？"
       : "0の遺物を所持していません。\nこの状態で転生しても、素の確率上昇はほとんどありません。\nそれでも転生しますか？";
     if (!window.confirm(message)) {
+      state.stones += cost;
       return { ok: false, logs: ["転生を取りやめた。"] };
     }
 
@@ -311,6 +350,7 @@
     nextState.rebirthState.baseRateRebirthBonus = entry.totalBaseRateBonus;
     nextState.rebirthState.lastRebirthAt = entry.executedAt;
     nextState.rebirthState.history = history.slice(-100);
+    nextState.tutorialState = JSON.parse(JSON.stringify(state.tutorialState || nextState.tutorialState));
     nextState.zeroRelicState = JSON.parse(JSON.stringify(state.zeroRelicState || nextState.zeroRelicState));
     nextState.zeroRelicState.purchasedThisLife = false;
     nextState.permanentRelics = JSON.parse(JSON.stringify(state.permanentRelics || nextState.permanentRelics));
@@ -334,9 +374,16 @@
     return {
       ok: true,
       state: nextState,
-      logs: gainedBonus > 0
-        ? ["石を10,000個捧げた。", "転生が開始された。", "世界が初期化された。", "素の確率が上昇した。"]
-        : ["石を10,000個捧げた。", "転生が開始された。", "しかし、0の遺物は存在しなかった。", "ほとんど何も変わらないまま、世界だけが戻った。"]
+      logs: (function () {
+        var entries = [];
+        pushDiscountLog(entries, baseCost, cost, state);
+        if (gainedBonus > 0) {
+          entries.push("石を" + cost.toLocaleString("ja-JP") + "個捧げた。", "転生が開始された。", "世界が初期化された。", "素の確率が上昇した。");
+        } else {
+          entries.push("石を" + cost.toLocaleString("ja-JP") + "個捧げた。", "転生が開始された。", "しかし、0の遺物は存在しなかった。", "ほとんど何も変わらないまま、世界だけが戻った。");
+        }
+        return entries;
+      })()
     };
   }
 

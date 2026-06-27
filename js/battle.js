@@ -257,6 +257,25 @@
     }
   }
 
+  function awardConfiguredLimitedBugRelic(state, bugRank, logs) {
+    var config = data.BUG_LIMITED_RELIC_DROP && data.BUG_LIMITED_RELIC_DROP[bugRank];
+    var owned;
+    var rate;
+
+    if (!config || !config.relicId) {
+      return;
+    }
+
+    owned = state.ownedRelics && state.ownedRelics[config.relicId];
+    rate = owned ? config.repeatDropRate : config.firstDropRate;
+    if (!rate || Math.random() >= rate) {
+      return;
+    }
+
+    engine.acquireRelic(state, config.relicId, logs);
+    logs.push(bugRank + "バグの残骸から、値札のついた遺物が現れた。");
+  }
+
   function rollBugRelicDrop(state, bugRank, logs) {
     var candidates = getDropCandidatesForRank(bugRank);
 
@@ -267,6 +286,7 @@
     }
 
     rollRankMatchedBugDrop(state, bugRank, logs);
+    awardConfiguredLimitedBugRelic(state, bugRank, logs);
     awardLimitedBugRelic(state, bugRank, logs);
 
     var extraDropRate = getBonusBugRelicDropRate(state);
@@ -320,7 +340,7 @@
   function checkSpecialBugFlags(state, defeatedRank) {
     if (defeatedRank === "SSR" && !state.discoveredRelics.some(function (relicId) {
       var relic = data.RELIC_INDEX[relicId];
-      return relic && data.isRankAtLeast(relic.rank, "UR");
+      return relic && relic.rank !== "0" && data.isRankAtLeast(relic.rank, "UR");
     })) {
       state.specialFlags.defeatedSsrBugWithoutUr = true;
     }
@@ -342,10 +362,10 @@
 
     updateHighestObservedRank(state, rank);
     giveBugReward(state, battleState, logs);
-    rollBugRelicDrop(state, rank, logs);
     state.defeatedBugCounts[rank] = (state.defeatedBugCounts[rank] || 0) + 1;
     state.totalBugDefeats += 1;
     increaseBugDefeatRateBonus(state, rank, logs);
+    rollBugRelicDrop(state, rank, logs);
 
     if (!state.highestDefeatedBugRank || data.isRankAtLeast(rank, state.highestDefeatedBugRank)) {
       state.highestDefeatedBugRank = rank;

@@ -30,7 +30,7 @@
     if (!config) {
       return 0;
     }
-    return Math.floor(config.cost * Math.pow(2, getDungeonEnterCount(state, type)));
+    return effects.applyShopDiscount(Math.floor(config.cost * Math.pow(2, getDungeonEnterCount(state, type))), state);
   }
 
   function ensureDungeonCollections(state) {
@@ -100,6 +100,7 @@
       return { ok: false, logs: ["すでにダンジョンに入場しています。"] };
     }
     var cost = getDungeonCost(state, type);
+    var baseCost = Math.floor(config.cost * Math.pow(2, getDungeonEnterCount(state, type)));
     if (state.stones < cost) {
       return { ok: false, logs: ["石が足りません。必要石：" + cost.toLocaleString("ja-JP")] };
     }
@@ -121,7 +122,10 @@
       state.dungeonRecords.enteredDimensionalDungeon += 1;
     }
 
-    return { ok: true, logs: config.altarLogs.slice() };
+    return {
+      ok: true,
+      logs: (cost < baseCost ? ["SSR割引の遺物により、価格が" + Math.round(effects.calculateShopDiscountRate(state) * 100) + "%減少した。"] : []).concat(config.altarLogs.slice())
+    };
   }
 
   function exitDungeon(state, reason) {

@@ -17,6 +17,26 @@
     };
   }
 
+  function normalizeTutorialState(rawState) {
+    var source = rawState && typeof rawState === "object" ? rawState : {};
+    return {
+      hasSeenFirstTutorial: source.hasSeenFirstTutorial === true,
+      hasSeenRebirthTutorial: source.hasSeenRebirthTutorial === true,
+      hasSeenSecondLoopTutorial: source.hasSeenSecondLoopTutorial === true,
+      tutorialLogEnabled: source.tutorialLogEnabled !== false
+    };
+  }
+
+  function normalizeAutoButtonState(rawState) {
+    var fallback = data.createInitialState(Date.now()).autoButtonState;
+    var source = rawState && typeof rawState === "object" ? rawState : {};
+    return {
+      lastPlayerActionAt: clampNumber(source.lastPlayerActionAt, fallback.lastPlayerActionAt),
+      isRunning: source.isRunning === true,
+      startedAt: source.startedAt == null ? null : clampNumber(source.startedAt, null)
+    };
+  }
+
   function migrateLegacyRelics(state) {
     if (state.ownedRelics && typeof state.ownedRelics === "object") {
       return state.ownedRelics;
@@ -362,6 +382,8 @@
       zeroRelicState: normalizeZeroRelicState(state.zeroRelicState),
       permanentRelics: normalizePermanentRelics(state.permanentRelics),
       zeroSlimeRecords: normalizeZeroSlimeRecords(state.zeroSlimeRecords),
+      autoButtonState: normalizeAutoButtonState(state.autoButtonState),
+      tutorialState: normalizeTutorialState(state.tutorialState),
       achievementState: normalizeAchievementState(state.achievementState),
       relicRankTotal: normalizeRankTotals(state.relicRankTotal),
       totalDecomposeCount: Math.max(0, Math.floor(clampNumber(state.totalDecomposeCount, 0))),
@@ -438,7 +460,10 @@
         saveState(initialState);
         return cloneState(initialState);
       }
-      return normalizeState(JSON.parse(raw));
+      var loadedState = normalizeState(JSON.parse(raw));
+      loadedState.autoButtonState.isRunning = false;
+      loadedState.autoButtonState.startedAt = null;
+      return loadedState;
     } catch (error) {
       var recoveredState = data.createInitialState(Date.now());
       saveState(recoveredState);

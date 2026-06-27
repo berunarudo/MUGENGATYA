@@ -398,6 +398,34 @@ select {
   color: #d7d7d7;
 }
 
+.help-layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 10px;
+  min-height: 100%;
+}
+
+.help-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
+  border-right: 1px solid #363636;
+}
+
+.help-content {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding-left: 2px;
+}
+
+.help-content .box-block h3 {
+  margin-top: 0;
+}
+
 .relic-note {
   color: #f0c674;
   font-size: 0.82rem;
@@ -591,5 +619,22 @@ select {
 
   .detail-grid {
     grid-template-columns: 1fr;
+  }
+
+  .help-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .help-sidebar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    border-right: 0;
+    border-bottom: 1px solid #363636;
+    padding-right: 0;
+    padding-bottom: 8px;
+  }
+
+  .help-content {
+    padding-left: 0;
   }
 }

@@ -4,6 +4,9 @@
   var GACHA_COST = 1;
   var RECOVERY_INTERVAL_MS = 10000;
   var LONG_PRESS_INTERVAL = 300;
+  var AUTO_START_IDLE_TIME = 5000;
+  var AUTO_BASE_INTERVAL = 1000;
+  var AUTO_MIN_INTERVAL = 100;
 
   var BASE_STATS = {
     hp: 10,
@@ -272,14 +275,17 @@
   };
 
   var ACHIEVEMENT_CATEGORIES = [
-    { key: "gacha", label: "ガチャ実績" },
-    { key: "relic", label: "遺物実績" },
-    { key: "convex", label: "凸実績" },
-    { key: "bug", label: "バグ実績" },
-    { key: "dungeon", label: "ダンジョン実績" },
-    { key: "decompose", label: "分解実績" },
-    { key: "milestone", label: "到達実績" },
-    { key: "special", label: "特殊実績" }
+    { key: "gacha", label: "ガチャ" },
+    { key: "mining", label: "採掘" },
+    { key: "gem", label: "宝石" },
+    { key: "bug", label: "バグ撃破" },
+    { key: "dungeon", label: "ダンジョン" },
+    { key: "relic", label: "遺物" },
+    { key: "convex", label: "凸" },
+    { key: "decompose", label: "分解" },
+    { key: "infinity", label: "無限" },
+    { key: "rebirth", label: "転生" },
+    { key: "special", label: "特殊" }
   ];
 
   var RANK_ORDER = ["0", "IF", "ER", "IR", "QR", "BR", "GR", "LR", "AR", "UR", "SSSR", "SSR", "SR", "S", "N"];
@@ -305,6 +311,40 @@
   BUG_RANKS.forEach(function (bug) {
     BUG_RANK_INDEX[bug.rank] = bug;
   });
+  var BUG_LIMITED_RELIC_DROP = {
+    SSR: {
+      relicId: "bug_ssr_discount",
+      firstDropRate: 0.10,
+      repeatDropRate: 0.05
+    }
+  };
+  var BUG_RANKS_LIST = BUG_RANKS.map(function (bug) {
+    return bug.rank;
+  });
+
+  var BUG_ACHIEVEMENT_RANK_MULTIPLIER = {
+    S: 1,
+    SR: 2,
+    SSR: 5,
+    SSSR: 10,
+    UR: 20,
+    AR: 30,
+    LR: 50,
+    GR: 100,
+    BR: 200,
+    QR: 500,
+    IR: 1000,
+    ER: 5000
+  };
+
+  var BUG_ACHIEVEMENT_THRESHOLDS = [
+    { count: 10, baseReward: 1000 },
+    { count: 100, baseReward: 10000 },
+    { count: 1000, baseReward: 100000 },
+    { count: 10000, baseReward: 1000000 },
+    { count: 100000, baseReward: 10000000 },
+    { count: 1000000, baseReward: 100000000 }
+  ];
 
   function singleEffect(effectType, target, value, phase) {
     return [{ effectType: effectType, target: target, value: value, phase: phase }];
@@ -326,6 +366,7 @@
     createRelic("altar_ssr_long_press", "SSR", "万里の遺物", "メインボタンを長押しできるようになる。画面が切り替わっても、押し続けている限り現在のメインボタン処理を実行し続ける。", singleEffect("special", "unlock_long_press", 1, 8), { obtainType: "altar_only", autoEnableOnFirstGet: true, limitBreakable: false, decomposable: false, altarCost: 10000 }),
     createRelic("altar_ssr_multi_10", "SSR", "SSR連続の遺物", "10連ガチャを実行できるようになる。ただし10連ガチャの消費石は10,000になる。", singleEffect("special", "unlock_multi_draw_10", 10, 8), { obtainType: "altar_only", autoEnableOnFirstGet: true, limitBreakable: false, decomposable: false, altarCost: 10000 }),
     createRelic("altar_lr_multi_100", "LR", "LR回転する世界の遺物", "100連ガチャを実行できるようになる。ただし100連ガチャの消費石は100,000になる。", singleEffect("special", "unlock_multi_draw_100", 100, 8), { obtainType: "altar_only", autoEnableOnFirstGet: true, limitBreakable: false, decomposable: false, altarCost: 100000 }),
+    createRelic("altar_lr_auto_start", "LR", "LR自動起動の遺物", "5秒間ボタンを押さなかった場合、現在のメインボタンを自動で押し続ける。凸するほど実行間隔が短くなる。", singleEffect("special", "auto_main_button", 1, 8), { obtainType: "altar_only", autoEnableOnFirstGet: true, limitBreakable: true, decomposable: false, altarCost: 100000 }),
     createRelic("altar_br_multiverse", "BR", "BRマルチバースの遺物", "所持石をすべて消費し、その数だけガチャを引く。全石ガチャを解放する。", singleEffect("special", "unlock_all_stone_draw", 1, 8), { obtainType: "altar_only", autoEnableOnFirstGet: true, limitBreakable: false, decomposable: false, altarCost: 1000000 }),
     createRelic("n_attack", "N", "N攻撃の遺物", "", singleEffect("stat_flat", "attack", 1, 2)),
     createRelic("n_life", "N", "N生命の遺物", "", singleEffect("stat_flat", "hp", 1, 2)),
@@ -393,6 +434,7 @@
     createRelic("ssr_gold_vein", "SSR", "SSR黄金鉱脈の遺物", "", singleEffect("stone_gain_multiplier", "miss", 0.1, 2)),
     createRelic("ssr_hunt_god", "SSR", "SSR狩神の遺物", "", singleEffect("bug_damage_multiplier", "bug", 0.1, 4)),
     createRelic("ssr_magic_shell", "SSR", "SSR魔殻の遺物", "", singleEffect("bug_damage_reduction_multiplier", "bug", 0.1, 4)),
+    createRelic("bug_ssr_discount", "SSR", "SSR割引の遺物", "ショップ価格を減少させる。凸するほど減少率が上昇する。", singleEffect("special", "shop_discount", 0.05, 8), { obtainType: "bug_drop_only", dropBugRank: "SSR", autoEnableOnFirstGet: true, limitBreakable: true, decomposable: false }),
     createRelic("ssr_transcend", "SSR", "SSR超越の遺物", "", singleEffect("rate_add", "SSSR", 0.01, 2)),
     createRelic("ssr_selection", "SSR", "SSR選別の遺物", "", singleEffect("rate_subtract", "SSR", 0.01, 2)),
 
@@ -530,6 +572,7 @@
     altar_ssr_long_press: "万里の遺物",
     altar_ssr_multi_10: "SSR連続の遺物",
     altar_lr_multi_100: "LR回転する世界の遺物",
+    altar_lr_auto_start: "LR自動起動の遺物",
     altar_br_multiverse: "BRマルチバースの遺物",
     n_attack: "N攻撃の遺物",
     n_life: "N生命の遺物",
@@ -594,6 +637,7 @@
     ssr_gold_vein: "SSR黄金鉱脈の遺物",
     ssr_hunt_god: "SSR狩神の遺物",
     ssr_magic_shell: "SSR魔殻の遺物",
+    bug_ssr_discount: "SSR割引の遺物",
     ssr_transcend: "SSR超越の遺物",
     ssr_selection: "SSR選別の遺物",
     sssr_dragon_king: "SSSR竜王の遺物",
@@ -964,10 +1008,52 @@
     });
   }
 
+  function generateCountAchievements(definitions, categoryKey, targetType) {
+    return definitions.map(function (definition) {
+      return createAchievement({
+        id: definition.id,
+        categoryKey: categoryKey,
+        name: definition.name,
+        description: definition.description,
+        targetType: targetType,
+        targetValue: definition.targetValue,
+        rewardStone: definition.rewardStone,
+        implemented: true
+      });
+    });
+  }
+
+  function generateBugDefeatAchievements() {
+    var achievements = [];
+    BUG_RANKS_LIST.forEach(function (rank) {
+      var rankMultiplier = BUG_ACHIEVEMENT_RANK_MULTIPLIER[rank] || 1;
+      BUG_ACHIEVEMENT_THRESHOLDS.forEach(function (threshold) {
+        achievements.push(createAchievement({
+          id: "bug_defeat_" + rank + "_" + threshold.count,
+          categoryKey: "bug",
+          name: rank + "バグを" + threshold.count.toLocaleString("ja-JP") + "体撃破",
+          description: rank + "バグを" + threshold.count.toLocaleString("ja-JP") + "体撃破する。",
+          targetType: "bugRankDefeat",
+          targetRank: rank,
+          targetValue: threshold.count,
+          rewardStone: threshold.baseReward * rankMultiplier,
+          implemented: true
+        }));
+      });
+    });
+    return achievements;
+  }
+
   function buildAchievements() {
     return [
       createAchievement({ id: "gacha_1", categoryKey: "gacha", name: "初めてのガチャ", description: "ガチャを1回引く", targetType: "totalGachaCount", targetValue: 1, rewardStone: 10 }),
       createAchievement({ id: "gacha_2", categoryKey: "gacha", name: "ガチャ好き", description: "ガチャを100回引く", targetType: "totalGachaCount", targetValue: 100, rewardStone: 100 }),
+    ].concat(generateCountAchievements([
+      { id: "gacha_count_1000", name: "千回の観測者", description: "総ガチャ回数が1,000回に到達する。", targetValue: 1000, rewardStone: 1000 },
+      { id: "gacha_count_10000", name: "一万回の観測者", description: "総ガチャ回数が10,000回に到達する。", targetValue: 10000, rewardStone: 10000 },
+      { id: "gacha_count_100000", name: "十万回の観測者", description: "総ガチャ回数が100,000回に到達する。", targetValue: 100000, rewardStone: 100000 },
+      { id: "gacha_count_1000000", name: "百万回の観測者", description: "総ガチャ回数が1,000,000回に到達する。", targetValue: 1000000, rewardStone: 1000000 }
+    ], "gacha", "totalGachaCount")).concat([
       createAchievement({ id: "relic_n_1", categoryKey: "relic", name: "Nとの出会い", description: "N遺物を1個獲得する", targetType: "rankRelicTotal", targetRank: "N", targetValue: 1, rewardStone: 10 }),
       createAchievement({ id: "relic_rank_SSR_1", categoryKey: "relic", name: "SSR到達", description: "SSR遺物を1個獲得する", targetType: "rankRelicTotal", targetRank: "SSR", targetValue: 1, rewardStone: 500 }),
       createAchievement({ id: "convex_any_1", categoryKey: "convex", name: "初めての凸", description: "どれかの遺物を1凸にする", targetType: "maxRelicLimitBreak", targetValue: 1, rewardStone: 50 }),
@@ -980,9 +1066,22 @@
       createAchievement({ id: "bug_total_10", categoryKey: "bug", name: "バグハンター", description: "バグを10体倒す", targetType: "totalBugDefeats", targetValue: 10, rewardStone: 1000 }),
       createAchievement({ id: "bug_rank_S", categoryKey: "bug", name: "Sバグを倒した", description: "Sバグを撃破する", targetType: "bugRankDefeat", targetRank: "S", targetValue: 1, rewardStone: 1000 }),
       createAchievement({ id: "bug_rank_ER", categoryKey: "bug", name: "ERバグを倒した", description: "ERバグを撃破する", targetType: "bugRankDefeat", targetRank: "ER", targetValue: 1, rewardStone: 20000000000 }),
-      createAchievement({ id: "dungeon_mine_1", categoryKey: "dungeon", name: "初めての採掘", description: "採掘を1回行う", targetType: "totalMiningCount", targetValue: 1, rewardStone: 100, implemented: true }),
-      createAchievement({ id: "dungeon_mine_100", categoryKey: "dungeon", name: "鉱夫", description: "採掘を100回行う", targetType: "totalMiningCount", targetValue: 100, rewardStone: 10000, implemented: true }),
-      createAchievement({ id: "dungeon_gem_1", categoryKey: "dungeon", name: "宝石発見", description: "初めて宝石を掘る", targetType: "totalGemCount", targetValue: 1, rewardStone: 1000, implemented: true }),
+    ]).concat(generateBugDefeatAchievements()).concat([
+      createAchievement({ id: "dungeon_mine_1", categoryKey: "mining", name: "初めての採掘", description: "採掘を1回行う", targetType: "totalMiningCount", targetValue: 1, rewardStone: 100, implemented: true }),
+      createAchievement({ id: "dungeon_mine_100", categoryKey: "mining", name: "鉱夫", description: "採掘を100回行う", targetType: "totalMiningCount", targetValue: 100, rewardStone: 10000, implemented: true }),
+    ]).concat(generateCountAchievements([
+      { id: "mining_count_1000", name: "千回掘る者", description: "総採掘回数が1,000回に到達する。", targetValue: 1000, rewardStone: 5000 },
+      { id: "mining_count_10000", name: "一万回掘る者", description: "総採掘回数が10,000回に到達する。", targetValue: 10000, rewardStone: 50000 },
+      { id: "mining_count_100000", name: "十万回掘る者", description: "総採掘回数が100,000回に到達する。", targetValue: 100000, rewardStone: 500000 },
+      { id: "mining_count_1000000", name: "百万回掘る者", description: "総採掘回数が1,000,000回に到達する。", targetValue: 1000000, rewardStone: 5000000 }
+    ], "mining", "totalMiningCount")).concat([
+      createAchievement({ id: "dungeon_gem_1", categoryKey: "gem", name: "宝石発見", description: "初めて宝石を掘る", targetType: "totalGemCount", targetValue: 1, rewardStone: 1000, implemented: true }),
+    ]).concat(generateCountAchievements([
+      { id: "gem_count_1000", name: "千の宝石", description: "宝石を合計1,000個獲得する。", targetValue: 1000, rewardStone: 10000 },
+      { id: "gem_count_10000", name: "一万の宝石", description: "宝石を合計10,000個獲得する。", targetValue: 10000, rewardStone: 100000 },
+      { id: "gem_count_100000", name: "十万の宝石", description: "宝石を合計100,000個獲得する。", targetValue: 100000, rewardStone: 1000000 },
+      { id: "gem_count_1000000", name: "百万の宝石", description: "宝石を合計1,000,000個獲得する。", targetValue: 1000000, rewardStone: 10000000 }
+    ], "gem", "totalGemCount")).concat([
       createAchievement({ id: "dungeon_enter_golden", categoryKey: "dungeon", name: "黄金の採掘者", description: "黄金ダンジョンに入る", targetType: "enteredGoldenDungeon", targetValue: 1, rewardStone: 10000, implemented: true }),
       createAchievement({ id: "dungeon_enter_dimensional", categoryKey: "dungeon", name: "異次元採掘者", description: "異次元ダンジョンに入る", targetType: "enteredDimensionalDungeon", targetValue: 1, rewardStone: 100000, implemented: true }),
       createAchievement({ id: "dungeon_slime_1", categoryKey: "dungeon", name: "初めてのスライム退治", description: "スライムを1体撃破", targetType: "totalSlimeDefeats", targetValue: 1, rewardStone: 1000, implemented: true }),
@@ -991,30 +1090,30 @@
       createAchievement({ id: "dungeon_infinity_defeat", categoryKey: "dungeon", name: "無限を砕く者", description: "∞スライムを撃破", targetType: "totalInfinitySlimeDefeats", targetValue: 1, rewardStone: 100000000, implemented: true }),
       createAchievement({ id: "dungeon_zero_encounter", categoryKey: "dungeon", name: "0を見た採掘者", description: "0スライムに遭遇", targetType: "totalZeroSlimeEncounters", targetValue: 1, rewardStone: 10000000, implemented: true }),
       createAchievement({ id: "dungeon_zero_defeat", categoryKey: "dungeon", name: "スライム神", description: "0スライムを撃破", targetType: "totalZeroSlimeDefeats", targetValue: 1, rewardStone: 1000000000, implemented: true }),
-      createAchievement({ id: "rebirth_1", categoryKey: "milestone", name: "最初の転生", description: "転生を1回行う", targetType: "rebirthCount", targetValue: 1, rewardStone: 10000, implemented: true }),
-      createAchievement({ id: "rebirth_10", categoryKey: "milestone", name: "転生の習熟者", description: "転生を10回行う", targetType: "rebirthCount", targetValue: 10, rewardStone: 1000000, implemented: true }),
-      createAchievement({ id: "zero_relic_lb1", categoryKey: "special", name: "0を重ねる者", description: "0の遺物を1凸にする", targetType: "zeroRelicLimitBreak", targetValue: 1, rewardStone: 100000, implemented: true }),
+      createAchievement({ id: "rebirth_1", categoryKey: "rebirth", name: "最初の転生", description: "転生を1回行う", targetType: "rebirthCount", targetValue: 1, rewardStone: 10000, implemented: true }),
+      createAchievement({ id: "rebirth_10", categoryKey: "rebirth", name: "転生の習熟者", description: "転生を10回行う", targetType: "rebirthCount", targetValue: 10, rewardStone: 1000000, implemented: true }),
+      createAchievement({ id: "zero_relic_lb1", categoryKey: "rebirth", name: "0を重ねる者", description: "0の遺物を1凸にする", targetType: "zeroRelicLimitBreak", targetValue: 1, rewardStone: 100000, implemented: true }),
       createAchievement({ id: "decompose_1", categoryKey: "decompose", name: "初めての分解", description: "遺物を1個分解する", targetType: "totalDecomposeCount", targetValue: 1, rewardStone: 20 }),
       createAchievement({ id: "decompose_10", categoryKey: "decompose", name: "分解職人", description: "遺物を10個分解する", targetType: "totalDecomposeCount", targetValue: 10, rewardStone: 100 }),
       createAchievement({ id: "decompose_stone_1000000", categoryKey: "decompose", name: "石に還す者", description: "分解で1,000,000石獲得", targetType: "totalDecomposeStone", targetValue: 1000000, rewardStone: 1000000 }),
-      createAchievement({ id: "milestone_sr", categoryKey: "milestone", name: "レアの入口", description: "SR以上を獲得", targetType: "highestRelicRankAtLeast", targetRank: "SR", rewardStone: 500, implemented: true }),
-      createAchievement({ id: "milestone_ssr", categoryKey: "milestone", name: "本物の幸運", description: "SSR以上を獲得", targetType: "highestRelicRankAtLeast", targetRank: "SSR", rewardStone: 3000, implemented: true }),
-      createAchievement({ id: "milestone_ur", categoryKey: "milestone", name: "上位世界の始まり", description: "UR以上を獲得", targetType: "highestRelicRankAtLeast", targetRank: "UR", rewardStone: 100000, implemented: true }),
-      createAchievement({ id: "milestone_qr", categoryKey: "milestone", name: "ありえない引き", description: "QR以上を獲得", targetType: "highestRelicRankAtLeast", targetRank: "QR", rewardStone: 50000000, implemented: true }),
-      createAchievement({ id: "milestone_ir", categoryKey: "milestone", name: "確率の深淵", description: "IR以上を獲得", targetType: "highestRelicRankAtLeast", targetRank: "IR", rewardStone: 500000000, implemented: true }),
-      createAchievement({ id: "milestone_er", categoryKey: "milestone", name: "終端の観測", description: "ER以上を獲得", targetType: "highestRelicRankAtLeast", targetRank: "ER", rewardStone: 5000000000, implemented: true }),
-      createAchievement({ id: "milestone_infinity", categoryKey: "milestone", name: "無限の観測", description: "∞遺物を獲得", targetType: "future", rewardStone: 0, implemented: false, futurePhase: 8 }),
-      createAchievement({ id: "milestone_infinity_button", categoryKey: "milestone", name: "無限を押した者", description: "初めて「無限」を押す", targetType: "future", rewardStone: 0, implemented: false, futurePhase: 8 }),
-      createAchievement({ id: "milestone_infinity_lb1", categoryKey: "milestone", name: "二周目の世界", description: "∞凸1達成", targetType: "future", rewardStone: 1000000, implemented: false, futurePhase: 8 }),
-      createAchievement({ id: "milestone_infinity_lb5", categoryKey: "milestone", name: "確率の外側", description: "∞凸5達成", targetType: "future", rewardStone: 100000000, implemented: false, futurePhase: 8 }),
-      createAchievement({ id: "milestone_infinity_lb10", categoryKey: "milestone", name: "終わりなき始まり", description: "∞凸10達成", targetType: "future", rewardStone: 10000000000, implemented: false, futurePhase: 8 }),
+      createAchievement({ id: "milestone_sr", categoryKey: "gacha", name: "レアの入口", description: "SR以上を獲得", targetType: "highestRelicRankAtLeast", targetRank: "SR", rewardStone: 500, implemented: true }),
+      createAchievement({ id: "milestone_ssr", categoryKey: "gacha", name: "本物の幸運", description: "SSR以上を獲得", targetType: "highestRelicRankAtLeast", targetRank: "SSR", rewardStone: 3000, implemented: true }),
+      createAchievement({ id: "milestone_ur", categoryKey: "gacha", name: "上位世界の始まり", description: "UR以上を獲得", targetType: "highestRelicRankAtLeast", targetRank: "UR", rewardStone: 100000, implemented: true }),
+      createAchievement({ id: "milestone_qr", categoryKey: "gacha", name: "ありえない引き", description: "QR以上を獲得", targetType: "highestRelicRankAtLeast", targetRank: "QR", rewardStone: 50000000, implemented: true }),
+      createAchievement({ id: "milestone_ir", categoryKey: "gacha", name: "確率の深淵", description: "IR以上を獲得", targetType: "highestRelicRankAtLeast", targetRank: "IR", rewardStone: 500000000, implemented: true }),
+      createAchievement({ id: "milestone_er", categoryKey: "gacha", name: "終端の観測", description: "ER以上を獲得", targetType: "highestRelicRankAtLeast", targetRank: "ER", rewardStone: 5000000000, implemented: true }),
+      createAchievement({ id: "milestone_infinity", categoryKey: "infinity", name: "無限の観測", description: "∞遺物を獲得", targetType: "future", rewardStone: 0, implemented: false, futurePhase: 8 }),
+      createAchievement({ id: "milestone_infinity_button", categoryKey: "infinity", name: "無限を押した者", description: "初めて「無限」を押す", targetType: "future", rewardStone: 0, implemented: false, futurePhase: 8 }),
+      createAchievement({ id: "milestone_infinity_lb1", categoryKey: "infinity", name: "二周目の世界", description: "∞凸1達成", targetType: "future", rewardStone: 1000000, implemented: false, futurePhase: 8 }),
+      createAchievement({ id: "milestone_infinity_lb5", categoryKey: "infinity", name: "確率の外側", description: "∞凸5達成", targetType: "future", rewardStone: 100000000, implemented: false, futurePhase: 8 }),
+      createAchievement({ id: "milestone_infinity_lb10", categoryKey: "infinity", name: "終わりなき始まり", description: "∞凸10達成", targetType: "future", rewardStone: 10000000000, implemented: false, futurePhase: 8 }),
       createAchievement({ id: "special_total_miss_10000", categoryKey: "special", name: "ハズレに愛された者", description: "ハズレを10,000回引く", targetType: "totalMissCount", targetValue: 10000, rewardStone: 100000, implemented: true }),
-      createAchievement({ id: "special_n_only_ssr_bug", categoryKey: "special", name: "Nだけで勝つ", description: "UR未所持でSSRバグを撃破", targetType: "specialFlag", targetFlag: "defeatedSsrBugWithoutUr", rewardStone: 500000, implemented: true }),
+      createAchievement({ id: "special_n_only_ssr_bug", categoryKey: "special", name: "Nだけで勝つ", description: "UR未所持でSSRバグを撃破", targetType: "specialFlag", targetFlag: "defeatedSsrBugWithoutUr", rewardStone: 80000, implemented: true }),
       createAchievement({ id: "special_n_total_lb_10000", categoryKey: "special", name: "Nの総力", description: "N遺物の総凸数10,000", targetType: "rankTotalLimitBreak", targetRank: "N", targetValue: 10000, rewardStone: 1000000, implemented: true }),
       createAchievement({ id: "special_bug_spawn_three", categoryKey: "special", name: "バグに追われる者", description: "10回以内にバグが3回出現", targetType: "specialFlag", targetFlag: "threeBugSpawnsWithinTen", rewardStone: 50000, implemented: true }),
       createAchievement({ id: "special_sub001", categoryKey: "special", name: "確率の底を見た", description: "0.001%以下の遺物を獲得", targetType: "specialFlag", targetFlag: "subPoint001RelicFound", rewardStone: 1000000, implemented: true }),
-      createAchievement({ id: "special_infinity_break", categoryKey: "special", name: "無限突破", description: "∞遺物を初獲得", targetType: "future", rewardStone: 0, implemented: false, futurePhase: 8 })
-    ];
+      createAchievement({ id: "special_infinity_break", categoryKey: "infinity", name: "無限突破", description: "∞遺物を初獲得", targetType: "future", rewardStone: 0, implemented: false, futurePhase: 8 })
+    ]);
   }
 
   var ACHIEVEMENTS = buildAchievements();
@@ -1071,6 +1170,17 @@
       zeroRelicState: createZeroRelicState(),
       permanentRelics: createPermanentRelics(),
       zeroSlimeRecords: createZeroSlimeRecords(),
+      autoButtonState: {
+        lastPlayerActionAt: now,
+        isRunning: false,
+        startedAt: null
+      },
+      tutorialState: {
+        hasSeenFirstTutorial: false,
+        hasSeenRebirthTutorial: false,
+        hasSeenSecondLoopTutorial: false,
+        tutorialLogEnabled: true
+      },
       recentBugSpawnGachaCounts: [],
       ifUnlocked: false,
       bugLimitedRelicObtained: {
@@ -1107,6 +1217,9 @@
     GACHA_COST: GACHA_COST,
     RECOVERY_INTERVAL_MS: RECOVERY_INTERVAL_MS,
     LONG_PRESS_INTERVAL: LONG_PRESS_INTERVAL,
+    AUTO_START_IDLE_TIME: AUTO_START_IDLE_TIME,
+    AUTO_BASE_INTERVAL: AUTO_BASE_INTERVAL,
+    AUTO_MIN_INTERVAL: AUTO_MIN_INTERVAL,
     BASE_STATS: BASE_STATS,
     CONVEX_BONUS_BY_RANK: CONVEX_BONUS_BY_RANK,
     LIMIT_BREAK_GROWTH_TIERS: LIMIT_BREAK_GROWTH_TIERS,
@@ -1116,6 +1229,7 @@
     BUG_DEFEAT_RATE_BONUS_INCREASE: BUG_DEFEAT_RATE_BONUS_INCREASE,
     BUG_DEFEAT_RATE_BONUS_CAP: BUG_DEFEAT_RATE_BONUS_CAP,
     BUG_RANK_RELIC_DROP_RATE: BUG_RANK_RELIC_DROP_RATE,
+    BUG_LIMITED_RELIC_DROP: BUG_LIMITED_RELIC_DROP,
     ALTAR_EVENT_CONFIG: ALTAR_EVENT_CONFIG,
     ALTAR_EVENT_DEFINITIONS: ALTAR_EVENT_DEFINITIONS,
     ALTAR_EVENT_POOL: ALTAR_EVENT_POOL,
@@ -1129,11 +1243,14 @@
     ACHIEVEMENT_CATEGORIES: ACHIEVEMENT_CATEGORIES,
     ACHIEVEMENTS: ACHIEVEMENTS,
     ACHIEVEMENT_INDEX: ACHIEVEMENT_INDEX,
+    BUG_ACHIEVEMENT_RANK_MULTIPLIER: BUG_ACHIEVEMENT_RANK_MULTIPLIER,
+    BUG_ACHIEVEMENT_THRESHOLDS: BUG_ACHIEVEMENT_THRESHOLDS,
     GACHA_RANKS: GACHA_RANKS,
     RANK_ORDER: RANK_ORDER,
     TRACKED_RANKS: TRACKED_RANKS,
     PLAYER_RELIC_RANKS: PLAYER_RELIC_RANKS,
     BUG_RANKS: BUG_RANKS,
+    BUG_RANKS_LIST: BUG_RANKS_LIST,
     BUG_RANK_INDEX: BUG_RANK_INDEX,
     RELICS: RELICS,
     RELIC_INDEX: RELIC_INDEX,

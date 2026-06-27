@@ -457,6 +457,8 @@
         obtainType: relic.obtainType || "gacha",
         dropBugRank: relic.dropBugRank || null,
         uiRank: relic.uiRank || relic.rank,
+        altarCost: relic.altarCost || 0,
+        limitBreakable: relic.limitBreakable !== false,
         decomposable: relic.decomposable !== false,
         autoEnableOnFirstGet: relic.autoEnableOnFirstGet !== false,
         limitBreakGrowthMultiplier: calculateLimitBreakGrowthMultiplier(relic.rank, ownedData ? Math.max(0, ownedData.count - 1) : 0),
@@ -542,6 +544,12 @@
         }
         if (effectInfo.target === "infinity_trigger") {
           return { category: "特殊", target: "無限", currentLabel: "ONでガチャボタンが「無限」に変化", baseLabel: "ONでガチャボタンが「無限」に変化" };
+        }
+        if (effectInfo.target === "auto_main_button") {
+          return { category: "特殊", target: "自動起動", currentLabel: "5秒放置で自動実行", baseLabel: "5秒放置で自動実行" };
+        }
+        if (effectInfo.target === "shop_discount") {
+          return { category: "特殊", target: "ショップ", currentLabel: "価格を" + roundDisplay(current * 100) + "%減少", baseLabel: "価格を" + roundDisplay(base * 100) + "%減少" };
         }
         if (effectInfo.target === "unlock_multi_draw_10") {
           return { category: "特殊", target: "ガチャ", currentLabel: "10連ガチャを解放", baseLabel: "10連ガチャを解放" };
@@ -1482,6 +1490,37 @@
     return Boolean(state.ownedRelics && state.ownedRelics.altar_ssr_long_press && state.ownedRelics.altar_ssr_long_press.enabled !== false);
   }
 
+  function hasAutoStartRelic(state) {
+    return Boolean(state.ownedRelics && state.ownedRelics.altar_lr_auto_start);
+  }
+
+  function isAutoStartEnabled(state) {
+    return Boolean(state.ownedRelics && state.ownedRelics.altar_lr_auto_start && state.ownedRelics.altar_lr_auto_start.enabled !== false);
+  }
+
+  function calculateAutoButtonInterval(state) {
+    var owned = state.ownedRelics && state.ownedRelics.altar_lr_auto_start;
+    var limitBreak = owned ? Math.max(0, (owned.count || 1) - 1) : 0;
+    var growth = calculateLimitBreakGrowthMultiplier("LR", limitBreak);
+    return Math.max(data.AUTO_MIN_INTERVAL || 100, Math.floor((data.AUTO_BASE_INTERVAL || 1000) / Math.max(1, growth)));
+  }
+
+  function calculateShopDiscountRate(state) {
+    var owned = state.ownedRelics && state.ownedRelics.bug_ssr_discount;
+    if (!owned || owned.enabled === false) {
+      return 0;
+    }
+    return Math.min(0.8, 0.05 + Math.max(0, (owned.count || 1) - 1) * 0.01);
+  }
+
+  function applyShopDiscount(baseCost, state) {
+    var safeBaseCost = Math.max(0, Math.floor(baseCost || 0));
+    if (safeBaseCost <= 0) {
+      return 0;
+    }
+    return Math.max(1, Math.ceil(safeBaseCost * (1 - calculateShopDiscountRate(state))));
+  }
+
   function getRankMatchedBugDropRate(rank) {
     return data.BUG_RANK_RELIC_DROP_RATE[rank] || 0;
   }
@@ -1536,6 +1575,10 @@
       infinityRelicEnabled: isInfinityRelicEnabled(state),
       longPressUnlocked: hasLongPressRelic(state),
       longPressEnabled: isLongPressEnabled(state),
+      autoStartUnlocked: hasAutoStartRelic(state),
+      autoStartEnabled: isAutoStartEnabled(state),
+      autoButtonInterval: calculateAutoButtonInterval(state),
+      shopDiscountRate: calculateShopDiscountRate(state),
       altarEvent: getActiveAltarEvent(state),
       altarRateBonus: calculateAltarRateBonus(state),
       batchDrawOptions: getBatchDrawOptions(state)
@@ -1607,6 +1650,11 @@
     isInfinityRelicEnabled: isInfinityRelicEnabled,
     hasLongPressRelic: hasLongPressRelic,
     isLongPressEnabled: isLongPressEnabled,
+    hasAutoStartRelic: hasAutoStartRelic,
+    isAutoStartEnabled: isAutoStartEnabled,
+    calculateAutoButtonInterval: calculateAutoButtonInterval,
+    calculateShopDiscountRate: calculateShopDiscountRate,
+    applyShopDiscount: applyShopDiscount,
     getRankMatchedBugDropRate: getRankMatchedBugDropRate,
     getRelicsByRankForBugDrop: getRelicsByRankForBugDrop,
     hasBatchDrawRelic: hasBatchDrawRelic,

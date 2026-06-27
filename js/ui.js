@@ -4,6 +4,7 @@
   var achievements = window.InfinityGachaAchievements;
   var decompose = window.InfinityGachaDecompose;
   var dungeon = window.InfinityGachaDungeon;
+  var help = window.InfinityGachaHelp;
 
   function escapeHtml(text) {
     return String(text)
@@ -32,6 +33,33 @@
 
   function detailCell(label, value) {
     return '<span class="detail-label">' + escapeHtml(label) + '</span><span class="detail-value">' + escapeHtml(String(value)) + '</span>';
+  }
+
+  function formatCostLabel(baseCost, discountedCost) {
+    if (discountedCost < baseCost) {
+      return '通常 ' + baseCost.toLocaleString('ja-JP') + '石 / 割引後 ' + discountedCost.toLocaleString('ja-JP') + '石';
+    }
+    return discountedCost.toLocaleString('ja-JP') + '石';
+  }
+
+  function getAutoStatusText(summary, state) {
+    var autoState = (state && state.autoButtonState) || { lastPlayerActionAt: Date.now(), isRunning: false };
+    if (!summary.autoStartUnlocked) {
+      return { footer: 'AUTO: 未所持', state: '未所持', remaining: '-', interval: '-', css: 'long-press-status long-press-disabled' };
+    }
+    if (!summary.autoStartEnabled) {
+      return { footer: 'AUTO: OFF', state: 'OFF', remaining: '-', interval: summary.autoButtonInterval + 'ms', css: 'long-press-status long-press-disabled' };
+    }
+    if (autoState.isRunning) {
+      return { footer: 'AUTO: 実行中 ' + summary.autoButtonInterval + 'ms', state: '実行中', remaining: '0.0秒', interval: summary.autoButtonInterval + 'ms', css: 'long-press-status long-press-active' };
+    }
+    return {
+      footer: 'AUTO: 待機中 ' + Math.max(0, (data.AUTO_START_IDLE_TIME - (Date.now() - autoState.lastPlayerActionAt)) / 1000).toFixed(1) + '秒',
+      state: '待機中',
+      remaining: Math.max(0, (data.AUTO_START_IDLE_TIME - (Date.now() - autoState.lastPlayerActionAt)) / 1000).toFixed(1) + '秒',
+      interval: summary.autoButtonInterval + 'ms',
+      css: 'long-press-status'
+    };
   }
 
   function looksMojibake(text) {
@@ -281,6 +309,7 @@
     var battleStats = summary.battleStats;
     var stoneGain = summary.stoneGain;
     var rerolls = summary.rerollEffects;
+    var autoInfo = getAutoStatusText(summary, state);
 
     var descriptions = Object.keys(data.STAT_DESCRIPTIONS).map(function (key) {
       var labels = {
@@ -345,6 +374,11 @@
       detailCell('無限の遺物状態', state.ownedRelics && state.ownedRelics.if_infinity ? (summary.infinityRelicEnabled ? 'ON' : 'OFF') : '未所持') +
       detailCell('万里の遺物', summary.longPressUnlocked ? '所持' : '未所持') +
       detailCell('長押し状態', summary.longPressUnlocked ? (summary.longPressEnabled ? 'ON' : 'OFF') : '未解放') +
+      detailCell('自動起動遺物', summary.autoStartUnlocked ? '所持' : '未所持') +
+      detailCell('自動起動状態', autoInfo.state) +
+      detailCell('自動起動まで', autoInfo.remaining) +
+      detailCell('自動実行間隔', autoInfo.interval) +
+      detailCell('ショップ割引率', Math.round((summary.shopDiscountRate || 0) * 100) + '% OFF') +
       detailCell('特殊ログ', state.specialLogUnlocked ? '解放済み' : '未解放') +
       detailCell('現在周回数', (state.infinityCount || 0) + 1) +
       detailCell('解放済みバグ', (state.unlockedBugRanks || []).join(' / ')) +
@@ -402,7 +436,12 @@
     renderSettingsToggle('実績報酬に石倍率を反映', settings.achievementStoneMultiplierEnabled === true, 'achievementStoneMultiplierEnabled', 'ONで実績報酬にも石倍率をかけます。') +
     renderSettingsToggle('未解放ランクへの上振れを許可', settings.allowRankBoostPastUnlock !== false, 'allowRankBoostPastUnlock', 'ONでバグランク上昇が未解放帯にも届きます。') +
     renderSettingsToggle('同ランクバグ遺物ドロップ', settings.enableRankMatchedBugDrop !== false, 'enableRankMatchedBugDrop', 'ONでバグ撃破時に対応ランクの遺物が追加で落ちます。') +
+    '<div class="box-block"><div class="toolbar"><button type="button" class="mini-button" data-open-help>ヘルプ</button><button type="button" class="mini-button" data-replay-tutorial>チュートリアルを再表示</button></div></div>' +
     '<div class="box-block"><button type="button" class="mini-button" data-open-reset>データリセット</button></div>';
+  }
+
+  function renderHelpView(helpUiState) {
+    return help.renderHelpView((helpUiState && helpUiState.category) || 'basic');
   }
 
   function formatRemainingTime(endsAt) {
@@ -413,16 +452,19 @@
     return minutes + "分" + seconds + "秒";
   }
 
-  function renderAltarRelicCard(summary, relicId, buttonLabel) {
+  function renderAltarRelicCard(state, summary, relicId, buttonLabel) {
     var relic = summary.relicViews.find(function (item) { return item.id === relicId; });
     if (!relic) {
       return '';
     }
-    var ownedText = relic.owned ? '所持済み' : '未所持';
-    var button = relic.owned
+    var baseCost = relic.altarCost || 0;
+    var discountedCost = effects.applyShopDiscount(baseCost, state);
+    var ownedText = relic.owned ? ('所持 / ' + (relic.limitBreak || 0) + '凸') : '未所持';
+    var canRepeatBuy = relic.limitBreakable !== false;
+    var button = relic.owned && !canRepeatBuy
       ? '<button type="button" class="mini-button" disabled>所持済み</button>'
-      : '<button type="button" class="mini-button" data-altar-relic="' + escapeHtml(relic.id) + '">' + escapeHtml(buttonLabel) + '</button>';
-    return '<article class="relic-card"><div class="relic-head"><div><div class="inventory-name">[' + escapeHtml(relic.uiRank || relic.rank) + '] ' + escapeHtml(displayRelicName(relic)) + '</div><div class="relic-meta">' + escapeHtml(ownedText) + ' / 祭壇限定</div></div>' + button + '</div><div class="detail-row"><span class="detail-label">効果</span><span class="detail-value">' + escapeHtml(displayRelicDescription(relic)) + '</span></div></article>';
+      : '<button type="button" class="mini-button" data-altar-relic="' + escapeHtml(relic.id) + '">' + escapeHtml(relic.owned ? '再購入' : buttonLabel) + '</button>';
+    return '<article class="relic-card"><div class="relic-head"><div><div class="inventory-name">[' + escapeHtml(relic.uiRank || relic.rank) + '] ' + escapeHtml(displayRelicName(relic)) + '</div><div class="relic-meta">' + escapeHtml(ownedText) + ' / 祭壇限定</div></div>' + button + '</div><div class="detail-row"><span class="detail-label">効果</span><span class="detail-value">' + escapeHtml(displayRelicDescription(relic)) + '</span></div><div class="detail-row"><span class="detail-label">価格</span><span class="detail-value">' + escapeHtml(formatCostLabel(baseCost, discountedCost)) + '</span></div></article>';
   }
 
   function renderAltarView(state, summary) {
@@ -433,7 +475,12 @@
     var normalDungeonCost = dungeon ? dungeon.getDungeonCost(state, 'normal') : 10000;
     var goldenDungeonCost = dungeon ? dungeon.getDungeonCost(state, 'golden') : 100000;
     var dimensionalDungeonCost = dungeon ? dungeon.getDungeonCost(state, 'dimensional') : 1000000;
+    var normalDungeonBaseCost = Math.floor(data.DUNGEON_TYPES.normal.cost * Math.pow(2, (state.dungeonRecords && state.dungeonRecords.enteredNormalDungeon) || 0));
+    var goldenDungeonBaseCost = Math.floor(data.DUNGEON_TYPES.golden.cost * Math.pow(2, (state.dungeonRecords && state.dungeonRecords.enteredGoldenDungeon) || 0));
+    var dimensionalDungeonBaseCost = Math.floor(data.DUNGEON_TYPES.dimensional.cost * Math.pow(2, (state.dungeonRecords && state.dungeonRecords.enteredDimensionalDungeon) || 0));
     var nextRebirthBonus = summary.nextRebirthBaseRateBonus || 0;
+    var zeroRelicCost = effects.applyShopDiscount(100000, state);
+    var rebirthCost = effects.applyShopDiscount(10000, state);
     var eventBlock = activeEvent
       ? '<div class="box-block"><h3>発動中の祭壇イベント</h3><div class="detail-grid">' +
         detailCell('イベント名', activeEvent.effectName) +
@@ -454,9 +501,9 @@
       : '';
 
     var dungeonButtons = inDungeon ? '' : '<div class="box-block"><h3>ダンジョン入場</h3><div class="toolbar">' +
-      '<button type="button" class="mini-button" data-altar-dungeon=\"normal\">通常 ' + escapeHtml(normalDungeonCost.toLocaleString('ja-JP')) + '石</button>' +
-      '<button type="button" class="mini-button" data-altar-dungeon=\"golden\">黄金 ' + escapeHtml(goldenDungeonCost.toLocaleString('ja-JP')) + '石</button>' +
-      '<button type="button" class="mini-button" data-altar-dungeon=\"dimensional\">異次元 ' + escapeHtml(dimensionalDungeonCost.toLocaleString('ja-JP')) + '石</button>' +
+      '<button type="button" class="mini-button" data-altar-dungeon=\"normal\">通常 ' + escapeHtml(formatCostLabel(normalDungeonBaseCost, normalDungeonCost)) + '</button>' +
+      '<button type="button" class="mini-button" data-altar-dungeon=\"golden\">黄金 ' + escapeHtml(formatCostLabel(goldenDungeonBaseCost, goldenDungeonCost)) + '</button>' +
+      '<button type="button" class="mini-button" data-altar-dungeon=\"dimensional\">異次元 ' + escapeHtml(formatCostLabel(dimensionalDungeonBaseCost, dimensionalDungeonCost)) + '</button>' +
     '</div></div>';
 
     var rebirthBlock = '<div class="box-block"><h3>0と転生</h3><div class="detail-grid">' +
@@ -466,11 +513,12 @@
       detailCell('転生回数', (state.rebirthState && state.rebirthState.rebirthCount) || 0) +
       detailCell('素の確率倍率', formatMultiplier(summary.rebirthMultiplier || 1)) +
       detailCell('次回転生時上昇', '+' + formatPercent(nextRebirthBonus * 100)) +
+      detailCell('ショップ割引率', Math.round((summary.shopDiscountRate || 0) * 100) + '% OFF') +
       detailCell('スライムの遺物', slimeRelicOwned ? '所持' : '未所持') +
       detailCell('スライム神', (state.zeroSlimeRecords && state.zeroSlimeRecords.totalDefeats > 0) ? '達成' : '未達成') +
     '</div>' + (inDungeon ? '<p class="section-note">ダンジョン中の祭壇は確認のみ可能です。</p>' : '<div class="toolbar">' +
-      '<button type="button" class="mini-button" data-zero-relic-buy' + (zeroRelicState.purchasedThisLife ? ' disabled' : '') + '>0の遺物を購入する: 100,000石</button>' +
-      '<button type="button" class="mini-button" data-rebirth-execute>転生する: 10,000石</button>' +
+      '<button type="button" class="mini-button" data-zero-relic-buy' + (zeroRelicState.purchasedThisLife ? ' disabled' : '') + '>0の遺物を購入する: ' + escapeHtml(formatCostLabel(100000, zeroRelicCost)) + '</button>' +
+      '<button type="button" class="mini-button" data-rebirth-execute>転生する: ' + escapeHtml(formatCostLabel(10000, rebirthCost)) + '</button>' +
     '</div>') + '</div>';
 
     return '<div class="box-block"><h3>祭壇</h3><div class="detail-grid">' +
@@ -481,16 +529,17 @@
     rebirthBlock +
     eventBlock +
     (inDungeon ? '' : '<div class="box-block"><h3>イベント発動</h3><div class="toolbar">' +
-      '<button type="button" class="mini-button" data-altar-event="normal"' + (activeEvent ? ' disabled' : '') + '>イベント 10,000石</button>' +
-      '<button type="button" class="mini-button" data-altar-event="super"' + (activeEvent ? ' disabled' : '') + '>スーパー 100,000石</button>' +
-      '<button type="button" class="mini-button" data-altar-event="hyper"' + (activeEvent ? ' disabled' : '') + '>ハイパー 1,000,000石</button>' +
+      '<button type="button" class="mini-button" data-altar-event="normal"' + (activeEvent ? ' disabled' : '') + '>イベント ' + escapeHtml(formatCostLabel(10000, effects.applyShopDiscount(10000, state))) + '</button>' +
+      '<button type="button" class="mini-button" data-altar-event="super"' + (activeEvent ? ' disabled' : '') + '>スーパー ' + escapeHtml(formatCostLabel(100000, effects.applyShopDiscount(100000, state))) + '</button>' +
+      '<button type="button" class="mini-button" data-altar-event="hyper"' + (activeEvent ? ' disabled' : '') + '>ハイパー ' + escapeHtml(formatCostLabel(1000000, effects.applyShopDiscount(1000000, state))) + '</button>' +
     '</div></div>') +
     dungeonButtons +
     (inDungeon ? '' : '<div class="box-block"><h3>祭壇限定遺物</h3>' +
-      renderAltarRelicCard(summary, 'altar_ssr_long_press', '万里の遺物を得る') +
-      renderAltarRelicCard(summary, 'altar_ssr_multi_10', 'SSR連続の遺物を獲得') +
-      renderAltarRelicCard(summary, 'altar_lr_multi_100', 'LR回転する世界の遺物を獲得') +
-      renderAltarRelicCard(summary, 'altar_br_multiverse', 'BRマルチバースの遺物を獲得') +
+      renderAltarRelicCard(state, summary, 'altar_ssr_long_press', '万里の遺物を得る') +
+      renderAltarRelicCard(state, summary, 'altar_ssr_multi_10', 'SSR連続の遺物を獲得') +
+      renderAltarRelicCard(state, summary, 'altar_lr_multi_100', 'LR回転する世界の遺物を獲得') +
+      renderAltarRelicCard(state, summary, 'altar_lr_auto_start', 'LR自動起動の遺物を獲得') +
+      renderAltarRelicCard(state, summary, 'altar_br_multiverse', 'BRマルチバースの遺物を獲得') +
     '</div>');
   }
 
@@ -569,49 +618,80 @@
 
   function filterAchievements(entries, uiState) {
     var filtered = entries.slice();
+    var categoryOrder = {};
 
-    if (uiState.filter === 'achieved') {
+    data.ACHIEVEMENT_CATEGORIES.forEach(function (category, index) {
+      categoryOrder[category.key] = index;
+    });
+
+    function getCategoryOrder(key) {
+      return Object.prototype.hasOwnProperty.call(categoryOrder, key) ? categoryOrder[key] : 999;
+    }
+
+    if (uiState.category && uiState.category !== 'all') {
+      filtered = filtered.filter(function (entry) { return entry.categoryKey === uiState.category; });
+    }
+
+    if (uiState.status === 'achieved') {
       filtered = filtered.filter(function (entry) { return entry.status.achieved; });
-    } else if (uiState.filter === 'unachieved') {
+    } else if (uiState.status === 'unachieved') {
       filtered = filtered.filter(function (entry) { return !entry.status.achieved && !entry.status.future; });
-    } else if (uiState.filter === 'claimable') {
+    } else if (uiState.status === 'claimable') {
       filtered = filtered.filter(function (entry) { return entry.status.canClaim; });
-    } else if (uiState.filter === 'claimed') {
+    } else if (uiState.status === 'claimed') {
       filtered = filtered.filter(function (entry) { return entry.status.claimed; });
-    } else if (uiState.filter !== 'all') {
-      filtered = filtered.filter(function (entry) { return entry.categoryKey === uiState.filter; });
     }
 
     filtered.sort(function (a, b) {
+      var statusPriorityA = a.status.canClaim ? 0 : (a.status.future ? 3 : (a.status.claimed ? 2 : 1));
+      var statusPriorityB = b.status.canClaim ? 0 : (b.status.future ? 3 : (b.status.claimed ? 2 : 1));
+
       if (uiState.sort === 'achievedFirst') {
         return Number(b.status.achieved) - Number(a.status.achieved);
       }
       if (uiState.sort === 'claimableFirst') {
-        return Number(b.status.canClaim) - Number(a.status.canClaim);
+        if (Number(b.status.canClaim) !== Number(a.status.canClaim)) {
+          return Number(b.status.canClaim) - Number(a.status.canClaim);
+        }
+        return statusPriorityA - statusPriorityB;
       }
       if (uiState.sort === 'reward') {
         return b.rewardStoneDisplay - a.rewardStoneDisplay;
       }
       if (uiState.sort === 'nearest') {
+        if (statusPriorityA !== statusPriorityB) {
+          return statusPriorityA - statusPriorityB;
+        }
         return (b.progress.ratio || 0) - (a.progress.ratio || 0);
       }
-      return a.category.localeCompare(b.category, 'ja');
+      if (getCategoryOrder(a.categoryKey) !== getCategoryOrder(b.categoryKey)) {
+        return getCategoryOrder(a.categoryKey) - getCategoryOrder(b.categoryKey);
+      }
+      if (statusPriorityA !== statusPriorityB) {
+        return statusPriorityA - statusPriorityB;
+      }
+      if ((b.progress.ratio || 0) !== (a.progress.ratio || 0)) {
+        return (b.progress.ratio || 0) - (a.progress.ratio || 0);
+      }
+      return a.name.localeCompare(b.name, 'ja');
     });
 
     return filtered;
   }
 
+  function renderAchievementTabs(activeCategory) {
+    var tabs = [{ value: 'all', label: '全て' }].concat(data.ACHIEVEMENT_CATEGORIES.map(function (category) {
+      return { value: category.key, label: category.label };
+    }));
+
+    return '<div class="tabs">' + tabs.map(function (tab) {
+      return '<button type="button" class="tab-button ' + (activeCategory === tab.value ? 'is-active' : '') + '" data-achievement-category="' + escapeHtml(tab.value) + '">' + escapeHtml(tab.label) + '</button>';
+    }).join('') + '</div>';
+  }
+
   function renderAchievementToolbar(uiState) {
-    var filterOptions = [
-      { value: 'all', label: '全て' },
-      { value: 'gacha', label: 'ガチャ' },
-      { value: 'relic', label: '遺物' },
-      { value: 'convex', label: '凸' },
-      { value: 'bug', label: 'バグ' },
-      { value: 'dungeon', label: 'ダンジョン' },
-      { value: 'decompose', label: '分解' },
-      { value: 'milestone', label: '節目' },
-      { value: 'special', label: '特殊' },
+    var statusOptions = [
+      { value: 'all', label: '全状態' },
       { value: 'achieved', label: '達成済み' },
       { value: 'unachieved', label: '未達成' },
       { value: 'claimable', label: '受取可能' },
@@ -626,8 +706,8 @@
       { value: 'nearest', label: '進行順' }
     ];
 
-    return '<div class="toolbar"><div class="sort-wrap"><label for="achievement-filter">表示</label><select id="achievement-filter" data-achievement-filter>' + filterOptions.map(function (item) {
-      return '<option value="' + item.value + '"' + (uiState.filter === item.value ? ' selected' : '') + '>' + escapeHtml(item.label) + '</option>';
+    return renderAchievementTabs(uiState.category) + '<div class="toolbar"><div class="sort-wrap"><label for="achievement-status">状態</label><select id="achievement-status" data-achievement-status>' + statusOptions.map(function (item) {
+      return '<option value="' + item.value + '"' + (uiState.status === item.value ? ' selected' : '') + '>' + escapeHtml(item.label) + '</option>';
     }).join('') + '</select></div><div class="sort-wrap"><label for="achievement-sort">並び替え</label><select id="achievement-sort" data-achievement-sort>' + sortOptions.map(function (item) {
       return '<option value="' + item.value + '"' + (uiState.sort === item.value ? ' selected' : '') + '>' + escapeHtml(item.label) + '</option>';
     }).join('') + '</select></div></div>';
@@ -640,7 +720,11 @@
     }
 
     return renderAchievementToolbar(uiState) + entries.map(function (entry) {
-      var statusLabel = entry.status.future ? '後のフェーズ' : (entry.status.achieved ? '達成済み' : '未達成');
+      var statusLabel = entry.status.future
+        ? '後のフェーズ'
+        : (entry.status.achieved
+          ? (entry.status.claimed ? '達成済み / 受取済み' : '達成済み / 未受取')
+          : '未達成');
       var rewardButton = entry.status.future
         ? '<button type="button" class="mini-button" disabled>未実装</button>'
         : entry.status.claimed
@@ -701,6 +785,9 @@
     }
     if (activeMenu === 'settings') {
       return { title: '設定', html: renderSettingsView(state), showBack: true };
+    }
+    if (activeMenu === 'help') {
+      return { title: 'ヘルプ', html: renderHelpView(uiState.help), showBack: true };
     }
 
     var dungeonStatusHtml = dungeon && dungeon.isInDungeon(state) ? dungeon.renderDungeonStatus(state) : '';
@@ -771,6 +858,16 @@
     status.textContent = '万里の遺物: ON / 長押し可能';
   }
 
+  function updateAutoStatusDisplay(summary, runtime) {
+    var status = document.getElementById('auto-main-status');
+    if (!status) {
+      return;
+    }
+    var autoInfo = getAutoStatusText(summary, { autoButtonState: runtime && runtime.autoState ? runtime.autoState : null });
+    status.className = autoInfo.css;
+    status.textContent = autoInfo.footer + ' / 割引 ' + Math.round((summary.shopDiscountRate || 0) * 100) + '% OFF';
+  }
+
   function updateResourceDisplay(state, recoveryRemainingMs) {
     document.getElementById('stone-count').textContent = String(state.stones);
     document.getElementById('recovery-timer').textContent = (recoveryRemainingMs / 1000).toFixed(1) + '秒';
@@ -790,6 +887,7 @@
     updateResourceDisplay(state, recoveryRemainingMs);
     updateMainButton(state, nextDrawCost);
     updateLongPressDisplay(summary, runtime);
+    updateAutoStatusDisplay(summary, runtime);
     document.getElementById('batch-draw-buttons').innerHTML = renderBatchDrawButtons(state, summary);
     document.getElementById('probability-list').innerHTML = buildProbabilityHtml(summary);
 
@@ -821,6 +919,7 @@
     updateResourceDisplay(state, recoveryRemainingMs);
     updateMainButton(state, nextDrawCost);
     updateLongPressDisplay(summary, runtime);
+    updateAutoStatusDisplay(summary, runtime);
     document.getElementById('batch-draw-buttons').innerHTML = renderBatchDrawButtons(state, summary);
 
     if (!state.isBattle) {

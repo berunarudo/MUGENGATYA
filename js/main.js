@@ -10,6 +10,7 @@
   var altar = window.InfinityGachaAltar;
   var dungeon = window.InfinityGachaDungeon;
   var audio = window.InfinityGachaAudio;
+  var tutorial = window.InfinityGachaTutorial;
   var ui = window.InfinityGachaUi;
 
   var state = storage.loadState();
@@ -24,8 +25,13 @@
       sort: "rank"
     },
     achievements: {
-      filter: "all",
+      category: "all",
+      status: "all",
       sort: "category"
+    },
+    help: {
+      category: "basic",
+      returnMenu: "settings"
     }
   };
   var chromeState = {
@@ -38,6 +44,10 @@
     timeoutId: null,
     intervalId: null,
     suppressClick: false
+  };
+  var autoMainButtonRuntime = {
+    timerId: null,
+    checkIntervalId: null
   };
 
   function looksMojibake(text) {
@@ -59,6 +69,13 @@
     messages.forEach(pushLog);
   }
 
+  function showPendingTutorials() {
+    var messages = tutorial.collectPendingTutorialLogs(state);
+    if (messages.length) {
+      pushLogs(messages);
+    }
+  }
+
   function getRecoveryRemainingMs(now) {
     var elapsed = now - state.lastRecoveryAt;
     var remainder = elapsed % data.RECOVERY_INTERVAL_MS;
@@ -71,8 +88,113 @@
 
   function getLongPressRuntime() {
     return {
-      isActive: longPressState.isActive
+      isActive: longPressState.isActive,
+      autoState: state.autoButtonState || null
     };
+  }
+
+  function ensureAutoButtonState() {
+    if (!state.autoButtonState) {
+      state.autoButtonState = {
+        lastPlayerActionAt: Date.now(),
+        isRunning: false,
+        startedAt: null
+      };
+    }
+    return state.autoButtonState;
+  }
+
+  function clearAutoMainButtonTimer() {
+    if (autoMainButtonRuntime.timerId) {
+      window.clearTimeout(autoMainButtonRuntime.timerId);
+      autoMainButtonRuntime.timerId = null;
+    }
+  }
+
+  function markPlayerActivity(options) {
+    options = options || {};
+    ensureAutoButtonState().lastPlayerActionAt = Date.now();
+    if (!options.keepAutoRunning) {
+      stopAutoMainButton(options.reason || "プレイヤー操作を検知。", false);
+    }
+  }
+
+  function isAutoStartAvailable() {
+    return effects.isAutoStartEnabled(state);
+  }
+
+  function canUseAutoMainButton() {
+    if (!isAutoStartAvailable()) {
+      return false;
+    }
+    if (effects.isInfinityRelicEnabled(state)) {
+      return false;
+    }
+    return activeMenu === "" || state.isBattle || state.pendingBugRank || dungeon.isInDungeon(state);
+  }
+
+  function getAutoStopReason() {
+    var autoState = ensureAutoButtonState();
+    if (!effects.hasAutoStartRelic(state)) {
+      return "LR自動起動の遺物を所持していません。";
+    }
+    if (!effects.isAutoStartEnabled(state)) {
+      return "LR自動起動の遺物をOFFにしました。";
+    }
+    if (effects.isInfinityRelicEnabled(state)) {
+      return "危険操作を検知。";
+    }
+    if (activeMenu !== "" && !state.isBattle && !state.pendingBugRank && !dungeon.isInDungeon(state)) {
+      return "操作対象外の画面のため、自動起動を停止しました。";
+    }
+    if (!state.isBattle && !state.pendingBugRank && !dungeon.isInDungeon(state)) {
+      var summary = getSummary();
+      var nextDrawCost = engine.getNextDrawCost(state, summary);
+      if (!nextDrawCost.isFree && state.stones < nextDrawCost.amount) {
+        return "石が不足しています。";
+      }
+    }
+    if (autoState.isRunning && state.isBattle === false && state.pendingBugRank == null && dungeon.isInDungeon(state) === false && activeMenu !== "") {
+      return "危険操作を検知。";
+    }
+    return "";
+  }
+
+  function scheduleAutoMainButtonTick() {
+    clearAutoMainButtonTimer();
+    if (!ensureAutoButtonState().isRunning) {
+      return;
+    }
+    autoMainButtonRuntime.timerId = window.setTimeout(runAutoMainButtonTick, effects.calculateAutoButtonInterval(state));
+  }
+
+  function stopAutoMainButton(reason, shouldRender) {
+    var autoState = ensureAutoButtonState();
+    var wasRunning = autoState.isRunning;
+    clearAutoMainButtonTimer();
+    autoState.isRunning = false;
+    autoState.startedAt = null;
+    if (reason && wasRunning) {
+      pushLog(reason);
+      pushLog("自動起動を停止しました。");
+    }
+    if (shouldRender !== false && (wasRunning || reason)) {
+      persistAndRender();
+    }
+  }
+
+  function startAutoMainButton() {
+    var autoState = ensureAutoButtonState();
+    if (autoState.isRunning || !canUseAutoMainButton()) {
+      return;
+    }
+    autoState.isRunning = true;
+    autoState.startedAt = Date.now();
+    pushLog("5秒間、操作がありませんでした。");
+    pushLog("LR自動起動の遺物が起動しました。");
+    pushLog("自動実行を開始します。");
+    persistAndRender();
+    scheduleAutoMainButtonTick();
   }
 
   function refreshAchievements() {
@@ -84,6 +206,7 @@
   }
 
   function persistAndRender() {
+    ensureAutoButtonState();
     pushLogs(altar.clearExpiredAltarEvent(state));
     applyDungeonTimers();
     state = storage.saveState(state);
@@ -151,6 +274,25 @@
       pushLog("実績画面を表示しました。");
     } else if (menuName === "settings") {
       pushLog("設定を表示しました。");
+    }
+    persistAndRender();
+  }
+
+  function openHelpFromSettings() {
+    uiState.help.returnMenu = activeMenu || "settings";
+    activeMenu = "help";
+    pushLog("設定からヘルプを開きました。");
+    pushLog("ヘルプ画面に切り替えます。");
+    persistAndRender();
+  }
+
+  function closeHelp(target) {
+    if (target === "settings") {
+      activeMenu = "settings";
+      pushLog("設定画面に戻りました。");
+    } else {
+      activeMenu = "";
+      pushLog("ガチャ結果ログに戻りました。");
     }
     persistAndRender();
   }
@@ -270,7 +412,8 @@
     persistAndRender();
   }
 
-  function handleMainButtonAction() {
+  function handleMainButtonAction(options) {
+    options = options || {};
     if (state.isBattle) {
       audio.playSe(state, "mainButton");
       handleBattleTurn();
@@ -289,6 +432,9 @@
     }
 
     if (effects.isInfinityRelicEnabled(state)) {
+      if (options.source === "auto") {
+        return { ok: false, dangerous: true, autoStopReason: "危険操作を検知。" };
+      }
       if (dungeon.isInDungeon(state)) {
         pushLog("ダンジョン内では無限を実行できません。");
         persistAndRender();
@@ -304,9 +450,14 @@
       state = outcome.state;
       activeMenu = "";
       pushLogs(outcome.logs);
+      showPendingTutorials();
       refreshAchievements();
       persistAndRender();
       return { ok: true, dangerous: true };
+    }
+
+    if (options.source === "auto" && activeMenu !== "") {
+      return { ok: false, autoStopReason: "操作対象外の画面のため、自動起動を停止しました。" };
     }
 
     handleGachaDraw();
@@ -314,7 +465,8 @@
   }
 
   function handleMainAction() {
-    handleMainButtonAction();
+    markPlayerActivity({ reason: "プレイヤー操作を検知。", keepAutoRunning: false });
+    handleMainButtonAction({ source: "manual" });
   }
 
   function clearLongPressTimers() {
@@ -373,7 +525,7 @@
     }
 
     try {
-      handleMainButtonAction();
+      handleMainButtonAction({ source: "long_press" });
     } catch (error) {
       stopLongPressMainAction("長押し中にエラーが発生したため停止しました。");
       return;
@@ -392,6 +544,7 @@
     if (event) {
       event.preventDefault();
     }
+    markPlayerActivity({ reason: "プレイヤー操作を検知。", keepAutoRunning: false });
 
     longPressState.pointerDown = true;
     clearLongPressTimers();
@@ -461,12 +614,14 @@
 
   function toggleRelicEnabled(relicId) {
     if (relicId === "altar_zero_relic") {
+      markPlayerActivity({ reason: "プレイヤー操作を検知。", keepAutoRunning: false });
       state.zeroRelicState.enabled = !state.zeroRelicState.enabled;
       pushLog("0の遺物を" + (state.zeroRelicState.enabled ? "ON" : "OFF") + "にしました。");
       persistAndRender();
       return;
     }
     if (relicId === "infinity_slime_relic") {
+      markPlayerActivity({ reason: "プレイヤー操作を検知。", keepAutoRunning: false });
       state.permanentRelics.infinity_slime_relic.enabled = !state.permanentRelics.infinity_slime_relic.enabled;
       pushLog("スライムの遺物を" + (state.permanentRelics.infinity_slime_relic.enabled ? "ON" : "OFF") + "にしました。");
       persistAndRender();
@@ -476,8 +631,17 @@
       return;
     }
 
+    if (relicId !== "altar_lr_auto_start") {
+      markPlayerActivity({ reason: "プレイヤー操作を検知。", keepAutoRunning: false });
+    }
     state.ownedRelics[relicId].enabled = !state.ownedRelics[relicId].enabled;
     var relic = data.RELIC_INDEX[relicId];
+    if (relicId === "altar_lr_auto_start") {
+      ensureAutoButtonState().lastPlayerActionAt = Date.now();
+      if (!state.ownedRelics[relicId].enabled) {
+        stopAutoMainButton("LR自動起動の遺物をOFFにしました。", false);
+      }
+    }
     if (relicId === "if_infinity") {
       pushLog("無限の遺物を" + (state.ownedRelics[relicId].enabled ? "ON" : "OFF") + "にしました。");
       pushLog(state.ownedRelics[relicId].enabled ? "ガチャボタンが「無限」に変化した。" : "ガチャボタンは通常状態に戻りました。");
@@ -572,6 +736,40 @@
       return;
     }
 
+    var helpOpenButton = event.target.closest("[data-open-help]");
+    if (helpOpenButton) {
+      openHelpFromSettings();
+      return;
+    }
+
+    var replayTutorialButton = event.target.closest("[data-replay-tutorial]");
+    if (replayTutorialButton) {
+      pushLogs(tutorial.replayTutorial(state));
+      activeMenu = "";
+      persistAndRender();
+      return;
+    }
+
+    var helpCategoryButton = event.target.closest("[data-help-category]");
+    if (helpCategoryButton) {
+      uiState.help.category = helpCategoryButton.getAttribute("data-help-category");
+      persistAndRender();
+      return;
+    }
+
+    var helpReturnButton = event.target.closest("[data-help-return]");
+    if (helpReturnButton) {
+      closeHelp(helpReturnButton.getAttribute("data-help-return"));
+      return;
+    }
+
+    var achievementCategoryButton = event.target.closest("[data-achievement-category]");
+    if (achievementCategoryButton) {
+      uiState.achievements.category = achievementCategoryButton.getAttribute("data-achievement-category");
+      persistAndRender();
+      return;
+    }
+
     var altarEventButton = event.target.closest("[data-altar-event]");
     if (altarEventButton) {
       if (dungeon.isInDungeon(state)) {
@@ -633,6 +831,7 @@
       if (rebirthOutcome.state) {
         state = rebirthOutcome.state;
         activeMenu = "";
+        showPendingTutorials();
       }
       pushLogs(rebirthOutcome.logs || []);
       refreshAchievements();
@@ -666,8 +865,8 @@
       persistAndRender();
       return;
     }
-    if (event.target.matches("[data-achievement-filter]")) {
-      uiState.achievements.filter = event.target.value;
+    if (event.target.matches("[data-achievement-status]")) {
+      uiState.achievements.status = event.target.value;
       persistAndRender();
       return;
     }
@@ -679,6 +878,7 @@
 
   function handleReset() {
     clearLongPressTimers();
+    stopAutoMainButton("危険操作を検知。", false);
     longPressState.pointerDown = false;
     longPressState.isActive = false;
     var accepted = window.confirm("infinityガチャのデータを初期化します。よろしいですか？");
@@ -692,11 +892,66 @@
     uiState.relic.sortMode = "acquired";
     uiState.decompose.filter = "all";
     uiState.decompose.sort = "rank";
-    uiState.achievements.filter = "all";
+    uiState.achievements.category = "all";
+    uiState.achievements.status = "all";
     uiState.achievements.sort = "category";
+    uiState.help.category = "basic";
+    uiState.help.returnMenu = "settings";
     pushLog("データをリセットしました。");
+    showPendingTutorials();
     refreshAchievements();
     persistAndRender();
+  }
+
+  function runAutoMainButtonTick() {
+    var stopReason = getAutoStopReason();
+    if (stopReason) {
+      stopAutoMainButton(stopReason, true);
+      return;
+    }
+
+    try {
+      var outcome = handleMainButtonAction({ source: "auto" });
+      if (outcome && outcome.autoStopReason) {
+        stopAutoMainButton(outcome.autoStopReason, true);
+        return;
+      }
+      if (outcome && outcome.ok === false && !state.isBattle && !state.pendingBugRank && !dungeon.isInDungeon(state)) {
+        stopAutoMainButton("石が不足しています。", true);
+        return;
+      }
+    } catch (error) {
+      stopAutoMainButton("エラーが発生したため停止しました。", true);
+      return;
+    }
+
+    stopReason = getAutoStopReason();
+    if (stopReason) {
+      stopAutoMainButton(stopReason, true);
+      return;
+    }
+
+    scheduleAutoMainButtonTick();
+  }
+
+  function checkAutoStart() {
+    var autoState = ensureAutoButtonState();
+    var stopReason = getAutoStopReason();
+
+    if (autoState.isRunning) {
+      if (stopReason) {
+        stopAutoMainButton(stopReason, true);
+      }
+      return;
+    }
+
+    if (!canUseAutoMainButton()) {
+      return;
+    }
+
+    if (Date.now() - autoState.lastPlayerActionAt >= data.AUTO_START_IDLE_TIME) {
+      startAutoMainButton();
+    }
   }
 
   function bindEvents() {
@@ -705,6 +960,15 @@
       audio.ensureAudioUnlocked();
       audio.syncBgm(state);
     }, { once: true });
+    document.addEventListener("pointerdown", function () {
+      markPlayerActivity({ reason: "プレイヤー操作を検知。", keepAutoRunning: false });
+    });
+    document.addEventListener("keydown", function () {
+      markPlayerActivity({ reason: "プレイヤー操作を検知。", keepAutoRunning: false });
+    });
+    document.addEventListener("touchstart", function () {
+      markPlayerActivity({ reason: "プレイヤー操作を検知。", keepAutoRunning: false });
+    });
     mainButton.addEventListener("click", function () {
       if (longPressState.suppressClick) {
         longPressState.suppressClick = false;
@@ -752,13 +1016,16 @@
   }
 
   function init() {
+    tutorial.ensureTutorialState(state);
     bindEvents();
     updateCollapsiblePanel("probability", chromeState.probabilityPanelCollapsed);
     updateCollapsiblePanel("status", chromeState.statusPanelCollapsed);
     refreshAchievements();
     applyStoneRecovery();
+    showPendingTutorials();
     persistAndRender();
     window.setInterval(applyStoneRecovery, 1000);
+    autoMainButtonRuntime.checkIntervalId = window.setInterval(checkAutoStart, 200);
   }
 
   init();

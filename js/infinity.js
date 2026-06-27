@@ -92,6 +92,7 @@
     nextState.zeroRelicState = JSON.parse(JSON.stringify(state.zeroRelicState || data.createZeroRelicState()));
     nextState.permanentRelics = JSON.parse(JSON.stringify(state.permanentRelics || data.createPermanentRelics()));
     nextState.zeroSlimeRecords = JSON.parse(JSON.stringify(state.zeroSlimeRecords || data.createZeroSlimeRecords()));
+    nextState.tutorialState = JSON.parse(JSON.stringify(state.tutorialState || nextState.tutorialState));
     nextState.highestRelicRank = null;
     nextState.highestObservedRank = null;
     nextState.maxRelicCount = 0;
