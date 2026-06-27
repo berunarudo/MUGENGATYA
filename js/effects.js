@@ -464,6 +464,10 @@
   function getAllRelicViews(state) {
     return data.RELICS.map(function (relic) {
       var ownedData = state.ownedRelics[relic.id] || null;
+      var discovered = Array.isArray(state.discoveredRelics) && state.discoveredRelics.indexOf(relic.id) !== -1;
+      if (!discovered && relic.id === "if_infinity" && (state.ifRelicObtained === true || (state.infinityCount || 0) > 0)) {
+        discovered = true;
+      }
       if (!ownedData && relic.id === "altar_zero_relic") {
         var zeroRelic = getZeroRelicState(state);
         if (zeroRelic.owned) {
@@ -499,7 +503,7 @@
         rank: relic.rank,
         name: relic.name,
         description: relic.description,
-        discovered: Array.isArray(state.discoveredRelics) && state.discoveredRelics.indexOf(relic.id) !== -1,
+        discovered: discovered,
         owned: Boolean(ownedData),
         count: ownedData ? ownedData.count : 0,
         limitBreak: relic.id === "altar_zero_relic"
@@ -534,6 +538,8 @@
   function describeEffect(effectInfo) {
     var current = roundDisplay(effectInfo.currentValue);
     var base = roundDisplay(effectInfo.baseValue);
+    var rawCurrent = effectInfo.currentValue;
+    var rawBase = effectInfo.baseValue;
     var target = targetName(effectInfo.target);
 
     switch (effectInfo.effectType) {
@@ -634,13 +640,13 @@
           return { category: "特殊", target: "∞バグ", currentLabel: "∞バグ防御を" + current + "に固定", baseLabel: "∞バグ防御を" + base + "に固定" };
         }
         if (effectInfo.target === "infinity_rate_growth_per_gacha") {
-          return { category: "特殊", target: "∞確率", currentLabel: "1回ごとに∞確率+" + formatRateDisplay(current), baseLabel: "1回ごとに∞確率+" + formatRateDisplay(base) };
+          return { category: "特殊", target: "∞確率", currentLabel: "∞成長値の初期量 " + formatRateDisplay(rawCurrent), baseLabel: "∞成長値の初期量 " + formatRateDisplay(rawBase) };
         }
         if (effectInfo.target === "random_rate_growth") {
-          return { category: "特殊", target: "確率", currentLabel: "1回ごとにランダム確率+" + formatRateDisplay(current), baseLabel: "1回ごとにランダム確率+" + formatRateDisplay(base) };
+          return { category: "特殊", target: "確率", currentLabel: "ランダム成長値の初期量 " + formatRateDisplay(rawCurrent), baseLabel: "ランダム成長値の初期量 " + formatRateDisplay(rawBase) };
         }
         if (effectInfo.target === "double_random_rate_growth") {
-          return { category: "特殊", target: "確率", currentLabel: "ランダム確率成長" + current + "倍", baseLabel: "ランダム確率成長" + base + "倍" };
+          return { category: "特殊", target: "確率", currentLabel: "選ばれた成長値を" + current + "倍化", baseLabel: "選ばれた成長値を" + base + "倍化" };
         }
         if (effectInfo.target === "all_stats_growth_after_bug_win") {
           return { category: "特殊", target: "バグ勝利", currentLabel: "勝利後に全ステータス成長", baseLabel: "勝利後に全ステータス成長" };
@@ -1613,8 +1619,9 @@
     if (!owned || owned.enabled === false) {
       return 0;
     }
+    var countMultiplier = Math.max(1, owned.count || 1);
     return data.FINITE_RELIC_INFINITY_RATE_GROWTH_BASE *
-      calculateLimitBreakGrowthMultiplier("IF", Math.max(0, (owned.count || 1) - 1)) *
+      countMultiplier *
       calculateInfinityMultiplier(state);
   }
 
@@ -1635,7 +1642,7 @@
     }
     var base = data.SHARD_RANDOM_RATE_GROWTH_BASE;
     var shardMultiplier = hasShard ? calculateLimitBreakGrowthMultiplier("N", Math.max(0, (owned.count || 1) - 1)) : 1;
-    return base * shardMultiplier * calculateRandomRateGrowthMultiplier(state) * calculateInfinityMultiplier(state);
+    return base * shardMultiplier * calculateInfinityMultiplier(state);
   }
 
   function calculateInfinityRateInfo(state) {

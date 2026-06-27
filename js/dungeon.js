@@ -166,6 +166,10 @@
     return logs;
   }
 
+  function canFleeDungeon(state) {
+    return isInDungeon(state) && state.dungeonState.type !== "void";
+  }
+
   function ensureVoidDungeonCollections(state) {
     ensureDungeonCollections(state);
     if (!state.voidDungeonState) {
@@ -380,7 +384,8 @@
 
   function getGemRowsForDungeon(state, dungeonType) {
     var rows = effects.calculateRateModifiers(state).rows.map(function (row) {
-      return { rank: row.rank, weight: Math.max(0, row.final) };
+      var shardGrowth = state && state.randomRateGrowthByShard ? (state.randomRateGrowthByShard[row.rank] || 0) : 0;
+      return { rank: row.rank, weight: Math.max(0, row.final + shardGrowth) };
     });
     var ifUnlocked = effects.calculateIfInfo(state).drawEnabled;
 
@@ -755,6 +760,7 @@
     getDungeonEnterCount: getDungeonEnterCount,
     getRemainingTimeMs: getRemainingTimeMs,
     getDungeonStatusText: getDungeonStatusText,
+    canFleeDungeon: canFleeDungeon,
     enterDungeon: enterDungeon,
     exitDungeon: exitDungeon,
     checkDungeonTime: checkDungeonTime,

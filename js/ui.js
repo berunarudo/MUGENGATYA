@@ -375,14 +375,14 @@
       detailCell('IF確率', summary.ifInfo ? summary.ifInfo.probabilityText : '未観測') +
       detailCell('∞バグ解放', state.infinityBugUnlocked ? '解放済み' : '未解放') +
       detailCell('∞基礎確率', summary.infinityRateInfo.baseText) +
-      detailCell('有限による∞成長', summary.infinityRateInfo.growthText) +
+      detailCell('∞成長値累積', summary.infinityRateInfo.growthText) +
       detailCell('最終∞確率', summary.infinityRateInfo.finalText) +
       detailCell('∞バグ被ダメ軽減', formatPercent((summary.infinityBugDamageReduction.reduction || 0) * 100)) +
       detailCell('∞バグ与ダメ上昇', formatPercent((summary.infinityBugDamageBonus || 0) * 100)) +
       detailCell('∞バグ防御無効', summary.infinityBugDefenseOverride !== null ? ('防御' + summary.infinityBugDefenseOverride) : 'なし') +
       detailCell('有限の遺物', state.ownedRelics && state.ownedRelics.infinity_finite_relic ? '所持' : '未所持') +
-      detailCell('欠片ランダム成長', formatRateValue(summary.shardRandomRateGrowthPerGacha || 0)) +
-      detailCell('ER成就補正', formatMultiplier(summary.shardGrowthMultiplier || 1)) +
+      detailCell('欠片の初期成長量', formatRateValue(summary.shardRandomRateGrowthPerGacha || 0)) +
+      detailCell('ER成就効果', (state.ownedRelics && state.ownedRelics.er_fulfillment && state.ownedRelics.er_fulfillment.enabled !== false) ? '選ばれた成長値を2倍化' : '未発動') +
       detailCell('ER創造累計HP', (state.creationRelicStatBonus && state.creationRelicStatBonus.hp) || 0) +
       detailCell('∞バグ遭遇数', (state.infinityBugRecords && state.infinityBugRecords.encounters) || 0) +
       detailCell('∞バグ撃破数', (state.infinityBugRecords && state.infinityBugRecords.defeats) || 0) +
@@ -902,6 +902,16 @@
     button.textContent = nextDrawCost.isFree ? 'ガチャを引く（無料）' : 'ガチャを引く';
   }
 
+  function updateDungeonFleeButton(state) {
+    var button = document.getElementById('dungeon-flee-button');
+    if (!button) {
+      return;
+    }
+    var canFlee = dungeon && dungeon.canFleeDungeon && dungeon.canFleeDungeon(state);
+    button.classList.toggle('is-hidden', !canFlee);
+    button.disabled = !canFlee;
+  }
+
   function updateLongPressDisplay(summary, runtime) {
     var status = document.getElementById('long-press-status');
     var button = document.getElementById('gacha-button');
@@ -959,6 +969,7 @@
   function renderState(state, summary, recoveryRemainingMs, activeMenu, nextDrawCost, uiState, runtime) {
     updateResourceDisplay(state, recoveryRemainingMs);
     updateMainButton(state, nextDrawCost);
+    updateDungeonFleeButton(state);
     updateLongPressDisplay(summary, runtime);
     updateAutoStatusDisplay(summary, runtime);
     document.getElementById('batch-draw-buttons').innerHTML = renderBatchDrawButtons(state, summary);
@@ -991,6 +1002,7 @@
   function refreshChrome(state, summary, recoveryRemainingMs, nextDrawCost, runtime) {
     updateResourceDisplay(state, recoveryRemainingMs);
     updateMainButton(state, nextDrawCost);
+    updateDungeonFleeButton(state);
     updateLongPressDisplay(summary, runtime);
     updateAutoStatusDisplay(summary, runtime);
     document.getElementById('batch-draw-buttons').innerHTML = renderBatchDrawButtons(state, summary);

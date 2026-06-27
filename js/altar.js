@@ -495,11 +495,16 @@
     nextState.totalDecomposeCount = 0;
     nextState.totalDecomposeStone = 0;
     nextState.highestRelicRank = null;
+    nextState.highestAchievementRelicRank = null;
     nextState.highestObservedRank = null;
     nextState.maxRelicCount = 0;
     nextState.maxRelicLimitBreak = 0;
     nextState.rankMaxLimitBreak = data.createRankLimitBreakObject();
     nextState.specialFlags = JSON.parse(JSON.stringify(data.createInitialState(Date.now()).specialFlags));
+    nextState.ifRelicObtained = state.ifRelicObtained === true || Boolean(state.ownedRelics && state.ownedRelics.if_infinity);
+    if (nextState.ifRelicObtained && nextState.discoveredRelics.indexOf("if_infinity") === -1) {
+      nextState.discoveredRelics.push("if_infinity");
+    }
     nextState.normalLoopStartAt = Date.now();
     nextState.logs = [];
 

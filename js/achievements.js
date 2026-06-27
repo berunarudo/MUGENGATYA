@@ -86,7 +86,8 @@
       case "totalDecomposeStone":
         return state.totalDecomposeStone || 0;
       case "highestRelicRankAtLeast":
-        return state.highestRelicRank ? (data.isRankAtLeast(state.highestRelicRank, achievement.targetRank) ? 1 : 0) : 0;
+        var highestAchievementRelicRank = state.highestAchievementRelicRank || state.highestRelicRank;
+        return highestAchievementRelicRank ? (data.isRankAtLeast(highestAchievementRelicRank, achievement.targetRank) ? 1 : 0) : 0;
       case "hasRelic":
         return state.ownedRelics && state.ownedRelics[achievement.targetRelicId] ? 1 : 0;
       case "hasPermanentRelic":

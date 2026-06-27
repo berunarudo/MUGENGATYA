@@ -327,7 +327,7 @@
   var INFINITY_RATE_RANKS = ["N", "S", "SR", "SSR", "SSSR", "UR", "AR", "LR", "GR", "BR", "QR", "IR", "ER", "IF", "∞"];
   var FINITE_RELIC_INFINITY_RATE_GROWTH_BASE = 0.000000000000000000000000000001;
   var SHARD_RANDOM_RATE_GROWTH_BASE = 0.000001;
-  var EVOLUTION_COST = 1000000;
+  var EVOLUTION_COST = 3000000;
   var EVOLUTION_RECIPES = [
     { id: "n_dust_to_er_transcendence", from: "n_dust", to: "er_transcendence", cost: EVOLUTION_COST },
     { id: "s_wooden_sword_to_er_absolute_sword", from: "s_wooden_sword", to: "er_absolute_sword", cost: EVOLUTION_COST },
@@ -650,11 +650,11 @@
     createRelic("er_infinity_gate", "ER", "ER無限門の遺物", "", singleEffect("special", "if_unlock", 1, 7), { obtainType: "bug_drop_only", dropBugRank: "ER" }),
     createRelic("er_transcendence", "ER", "ER超越の遺物", "∞バグから受けるダメージを80%減少する。", singleEffect("special", "infinity_bug_damage_reduction", 0.8, 8), { obtainType: "evolution_only", autoEnableOnFirstGet: true, limitBreakable: false, decomposable: false }),
     createRelic("er_absolute_sword", "ER", "ER絶剣の遺物", "∞バグの防御力を1にする。", singleEffect("special", "set_infinity_bug_defense", 1, 8), { obtainType: "evolution_only", autoEnableOnFirstGet: true, limitBreakable: false, decomposable: false }),
-    createRelic("er_fulfillment", "ER", "ER成就の遺物", "ガチャを引くたびに、ランダムな確率上昇量が2倍になる。", singleEffect("special", "double_random_rate_growth", 2, 8), { obtainType: "evolution_only", autoEnableOnFirstGet: true, limitBreakable: false, decomposable: false }),
+    createRelic("er_fulfillment", "ER", "ER成就の遺物", "ガチャを引くたびに、選ばれたランクのランダム確率成長値が2倍になる。", singleEffect("special", "double_random_rate_growth", 2, 8), { obtainType: "evolution_only", autoEnableOnFirstGet: true, limitBreakable: false, decomposable: false }),
     createRelic("er_creation", "ER", "ER創造の遺物", "バグ戦勝利後、ランクに応じて全ステータスが大きく上昇する。", singleEffect("special", "all_stats_growth_after_bug_win", 1, 8), { obtainType: "evolution_only", autoEnableOnFirstGet: true, limitBreakable: false, decomposable: false }),
       createRelic("er_void_relic", "ER", "ER虚無の遺物", "虚無の攻撃を受けても、全ステータスの減少を1にする。", singleEffect("special", "void_stat_loss_reduce_to_one", 1, 8), { obtainType: "evolution_only", autoEnableOnFirstGet: true, limitBreakable: false, decomposable: false }),
       createRelic("if_infinity", "IF", "無限の遺物", "", singleEffect("special", "infinity_trigger", 1, 8), { obtainType: "if_gacha", autoEnableOnFirstGet: false, decomposable: false, uiRank: "∞" }),
-      createRelic("infinity_finite_relic", "IF", "有限の遺物", "ガチャを引くたびに∞の確率が大きく上昇する。凸するほど上昇量が増える。", singleEffect("special", "infinity_rate_growth_per_gacha", FINITE_RELIC_INFINITY_RATE_GROWTH_BASE, 8), { obtainType: "infinity_bug_reward", autoEnableOnFirstGet: true, decomposable: false, permanent: true, uiRank: "∞" }),
+      createRelic("infinity_finite_relic", "IF", "有限の遺物", "ガチャを引くたびに∞確率成長値が大きく上昇する。凸するほど初期成長量が増える。", singleEffect("special", "infinity_rate_growth_per_gacha", FINITE_RELIC_INFINITY_RATE_GROWTH_BASE, 8), { obtainType: "infinity_bug_reward", autoEnableOnFirstGet: true, decomposable: false, permanent: true, uiRank: "∞" }),
       createRelic("if_random_relic", "IF", "IF乱数の遺物", "ガチャの特定ランクの最終確率を大きく上昇させる。", singleEffect("special", "selective_rate_control", 10, 8), { obtainType: "random_god_reward", autoEnableOnFirstGet: true, limitBreakable: false, decomposable: false, permanent: true }),
       createRelic("zero_ending_relic", "0", "0終焉の遺物", "全確率の基礎値を最低1%にする。凸すると最低基礎値が1%ずつ上昇する。", singleEffect("special", "minimum_base_rate", 1, 8), { obtainType: "void_reward", autoEnableOnFirstGet: true, decomposable: false, permanent: true, uiRank: "0" })
   ];
@@ -1380,6 +1380,7 @@
       totalDecomposeCount: 0,
       totalDecomposeStone: 0,
       highestRelicRank: null,
+      highestAchievementRelicRank: null,
       discoveredRelics: [],
       maxRelicCount: 0,
       maxRelicLimitBreak: 0,

@@ -445,6 +445,7 @@
 
   function backfillFromOwnedRelics(state) {
     var highestRank = state.highestRelicRank;
+    var highestAchievementRank = state.highestAchievementRelicRank;
     var maxCount = state.maxRelicCount;
     var maxLimitBreak = state.maxRelicLimitBreak;
 
@@ -460,6 +461,9 @@
       if (!highestRank || data.isRankAtLeast(relic.rank, highestRank)) {
         highestRank = relic.rank;
       }
+      if (relic.obtainType !== "evolution_only" && (!highestAchievementRank || data.isRankAtLeast(relic.rank, highestAchievementRank))) {
+        highestAchievementRank = relic.rank;
+      }
 
       maxCount = Math.max(maxCount, owned.count);
       maxLimitBreak = Math.max(maxLimitBreak, owned.count - 1);
@@ -467,6 +471,7 @@
     });
 
     state.highestRelicRank = highestRank;
+    state.highestAchievementRelicRank = highestAchievementRank;
     state.maxRelicCount = maxCount;
     state.maxRelicLimitBreak = maxLimitBreak;
     state.discoveredRelics = normalizeDiscoveredRelics(state.discoveredRelics);
@@ -517,6 +522,7 @@
       totalDecomposeCount: Math.max(0, Math.floor(clampNumber(state.totalDecomposeCount, 0))),
       totalDecomposeStone: Math.max(0, Math.floor(clampNumber(state.totalDecomposeStone, 0))),
       highestRelicRank: typeof state.highestRelicRank === "string" ? state.highestRelicRank : null,
+      highestAchievementRelicRank: typeof state.highestAchievementRelicRank === "string" ? state.highestAchievementRelicRank : null,
       discoveredRelics: normalizeDiscoveredRelics(state.discoveredRelics),
       maxRelicCount: Math.max(0, Math.floor(clampNumber(state.maxRelicCount, 0))),
       maxRelicLimitBreak: Math.max(0, Math.floor(clampNumber(state.maxRelicLimitBreak, 0))),
@@ -553,6 +559,9 @@
     if (!normalized.highestObservedRank) {
       normalized.highestObservedRank = normalized.highestRelicRank;
     }
+    if (!normalized.highestAchievementRelicRank) {
+      normalized.highestAchievementRelicRank = normalized.highestRelicRank;
+    }
 
     if (normalized.ownedRelics.er_infinity_gate) {
       normalized.ifUnlocked = true;
@@ -562,6 +571,9 @@
     }
     if (normalized.ownedRelics.if_infinity) {
       normalized.ifRelicObtained = true;
+    }
+    if (normalized.ifRelicObtained && normalized.discoveredRelics.indexOf("if_infinity") === -1) {
+      normalized.discoveredRelics.push("if_infinity");
     }
     if (normalized.ownedRelics.if_infinity || normalized.infinityCount >= 1) {
       normalized.voidState.unlocked = true;

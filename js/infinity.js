@@ -109,7 +109,10 @@
     nextState.infinityCount = nextCount;
     nextState.infinityExecuted = true;
     nextState.specialLogUnlocked = state.specialLogUnlocked === true || state.ifRelicObtained === true;
-    nextState.ifRelicObtained = false;
+    nextState.ifRelicObtained = state.ifRelicObtained === true || Boolean(state.ownedRelics && state.ownedRelics.if_infinity);
+    if (nextState.ifRelicObtained && nextState.discoveredRelics.indexOf("if_infinity") === -1) {
+      nextState.discoveredRelics.push("if_infinity");
+    }
     nextState.voidState.isInVoidBattle = false;
     nextState.infinityHistory = history;
     nextState.normalLoopStartAt = Date.now();

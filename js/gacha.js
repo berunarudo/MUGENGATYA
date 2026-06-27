@@ -214,7 +214,9 @@
 
     var finiteGrowth = summary.finiteRelicGrowthPerGacha || 0;
     if (finiteGrowth > 0) {
-      state.infinityRateGrowth = Math.max(0, (state.infinityRateGrowth || 0) + finiteGrowth);
+      var currentInfinityGrowth = Math.max(0, state.infinityRateGrowth || 0);
+      var seededInfinityGrowth = Math.max(finiteGrowth, currentInfinityGrowth);
+      state.infinityRateGrowth = Math.max(0, seededInfinityGrowth * 2);
       if (!options.silentLog) {
         logs.push("有限の遺物により、∞確率が上昇した。");
         logs.push("現在の∞確率上昇量：" + effects.formatRateDisplay(state.infinityRateGrowth));
@@ -224,7 +226,14 @@
     var shardGrowth = summary.shardRandomRateGrowthPerGacha || 0;
     if (shardGrowth > 0 && data.INFINITY_RATE_RANKS && data.INFINITY_RATE_RANKS.length) {
       var rank = randomPick(data.INFINITY_RATE_RANKS);
-      state.randomRateGrowthByShard[rank] = Math.max(0, (state.randomRateGrowthByShard[rank] || 0) + shardGrowth);
+      var currentGrowth = Math.max(0, state.randomRateGrowthByShard[rank] || 0);
+      var fulfillmentEnabled = Boolean(state && state.ownedRelics && state.ownedRelics.er_fulfillment && state.ownedRelics.er_fulfillment.enabled !== false);
+      if (fulfillmentEnabled) {
+        var seededGrowth = Math.max(shardGrowth, currentGrowth);
+        state.randomRateGrowthByShard[rank] = Math.max(0, seededGrowth * 2);
+      } else {
+        state.randomRateGrowthByShard[rank] = Math.max(0, currentGrowth + shardGrowth);
+      }
     }
   }
 
@@ -259,6 +268,11 @@
     state.maxRelicLimitBreak = Math.max(state.maxRelicLimitBreak, limitBreak);
     state.rankMaxLimitBreak[relic.rank] = Math.max(state.rankMaxLimitBreak[relic.rank] || 0, limitBreak);
     updateHighestRelicRank(state, relic.rank);
+    if (relic.obtainType !== "evolution_only") {
+      if (!state.highestAchievementRelicRank || data.isRankAtLeast(relic.rank, state.highestAchievementRelicRank)) {
+        state.highestAchievementRelicRank = relic.rank;
+      }
+    }
     applyLimitedRelicState(state, relicId);
     if (relicId === "if_infinity") {
       state.ifRelicObtained = true;
@@ -361,7 +375,12 @@
   function rerollRestrictedRank(summary, allowedRanks) {
     var rows = summary.rateTable.rows
       .filter(function (row) { return allowedRanks.indexOf(row.rank) !== -1; })
-      .map(function (row) { return { rank: row.rank, final: row.final }; });
+      .map(function (row) {
+        return {
+          rank: row.rank,
+          final: row.final + (summary.rateTable.shardGrowthByRank && summary.rateTable.shardGrowthByRank[row.rank] ? summary.rateTable.shardGrowthByRank[row.rank] : 0)
+        };
+      });
     return rollRankFromRows(rows);
   }
 

@@ -360,6 +360,21 @@
     persistAndRender();
   }
 
+  function handleDungeonFlee() {
+    if (!dungeon.canFleeDungeon(state)) {
+      pushLog("このダンジョンからは逃亡できません。");
+      persistAndRender();
+      return;
+    }
+    audio.playSe(state, "mainButton");
+    pushLogs(dungeon.exitDungeon(state, [
+      "ダンジョンから逃亡した。",
+      "ガチャ画面へ戻ります。"
+    ]));
+    activeMenu = "";
+    persistAndRender();
+  }
+
   function handleBatchDraw(type) {
     if (state.isBattle) {
       pushLog("戦闘中は連続ガチャを実行できません。");
@@ -1049,6 +1064,7 @@
     mainButton.addEventListener("pointerleave", releaseLongPressMainAction);
     mainButton.addEventListener("pointercancel", releaseLongPressMainAction);
     document.getElementById("reset-button").addEventListener("click", handleReset);
+    document.getElementById("dungeon-flee-button").addEventListener("click", handleDungeonFlee);
     document.getElementById("batch-draw-buttons").addEventListener("click", function (event) {
       var button = event.target.closest("[data-batch-draw]");
       if (!button) {
