@@ -2,6 +2,7 @@
   var data = window.InfinityGachaData;
   var engine = window.InfinityGachaEngine;
   var effects = window.InfinityGachaEffects;
+  var battle = window.InfinityGachaBattle;
 
   function randomPick(items) {
     return items[Math.floor(Math.random() * items.length)];
@@ -221,6 +222,132 @@
     return effects.calculateNextRebirthBaseRateBonus(state);
   }
 
+  function canEvolveRelic(state, recipeId) {
+    var recipe = data.EVOLUTION_RECIPE_INDEX[recipeId];
+    var owned;
+    var toRelic;
+    if (!recipe) {
+      return { ok: false, reason: "進化レシピが存在しません。" };
+    }
+    owned = state.ownedRelics[recipe.from];
+    toRelic = data.RELIC_INDEX[recipe.to];
+    if (!owned) {
+      return { ok: false, reason: "進化元遺物を所持していません。" };
+    }
+    if (owned.enabled !== false) {
+      if (recipe.from === "infinity_finite_relic") {
+        return { ok: false, reason: "有限の遺物がON中です。先にOFFにしてください。" };
+      }
+      return { ok: false, reason: "ON中の遺物は進化できません。先にOFFにしてください。" };
+    }
+    if (state.ownedRelics[recipe.to]) {
+      return { ok: false, reason: toRelic.name + "はすでに所持しています。これ以上進化できません。" };
+    }
+    return { ok: true, reason: "" };
+  }
+
+  function evolveRelic(state, recipeId) {
+    var recipe = data.EVOLUTION_RECIPE_INDEX[recipeId];
+    var check = canEvolveRelic(state, recipeId);
+    var fromRelic;
+    var toRelic;
+    var owned;
+    if (!check.ok) {
+      return { ok: false, logs: [check.reason] };
+    }
+    fromRelic = data.RELIC_INDEX[recipe.from];
+    toRelic = data.RELIC_INDEX[recipe.to];
+    if (state.stones < recipe.cost) {
+      return { ok: false, logs: ["進化に必要な石が足りません。", "必要石：" + recipe.cost.toLocaleString("ja-JP")] };
+    }
+    owned = state.ownedRelics[recipe.from];
+    state.stones -= recipe.cost;
+    owned.count -= 1;
+    if (owned.count <= 0) {
+      delete state.ownedRelics[recipe.from];
+    }
+    engine.acquireRelic(state, recipe.to, [], { silent: true });
+    state.evolutionCount = (state.evolutionCount || 0) + 1;
+    if (recipe.from === "infinity_finite_relic") {
+      return {
+        ok: true,
+        logs: [
+          "有限の遺物を進化させた。",
+          "形のあった確率が、形のない虚無へ沈んだ。",
+          "ER虚無の遺物を獲得。"
+        ]
+      };
+    }
+    return {
+      ok: true,
+      logs: [
+        fromRelic.name + "を進化させた。",
+        toRelic.name + "を獲得。"
+      ]
+    };
+  }
+
+  function isVoidUnlocked(state) {
+    return Boolean(
+      (state.voidState && state.voidState.unlocked === true) ||
+      (state.ownedRelics && state.ownedRelics.if_infinity) ||
+      (state.ifRelicObtained === true) ||
+      (state.infinityCount || 0) >= 1
+    );
+  }
+
+  function getVoidWarningText(state) {
+    var lines = [
+      "虚無に挑みます。",
+      "虚無は∞バグを遥かに超える力を持ちます。",
+      "5回に1回、全ステータスを大幅に減少させる攻撃を行います。",
+      "この減少は戦闘終了後も戻りません。",
+      "本当に挑みますか？"
+    ];
+    if (!state.ownedRelics || !state.ownedRelics.er_void_relic || state.ownedRelics.er_void_relic.enabled === false) {
+      lines.push("");
+      lines.push("ER虚無の遺物を所持していません。");
+      lines.push("虚無の特殊攻撃を受けると、全ステータスが大幅に減少します。");
+    } else {
+      lines.push("");
+      lines.push("ER虚無の遺物がONです。");
+      lines.push("虚無の特殊攻撃によるステータス減少は1になります。");
+    }
+    return lines.join("\n");
+  }
+
+  function challengeVoid(state) {
+    if (!isVoidUnlocked(state)) {
+      return { ok: false, logs: ["虚無はまだ解放されていません。"] };
+    }
+    if (state.isBattle) {
+      return { ok: false, logs: ["戦闘中は虚無に挑めません。"] };
+    }
+    if (!window.confirm(getVoidWarningText(state))) {
+      return { ok: false, logs: ["虚無への挑戦を取りやめた。"] };
+    }
+    if (!state.voidState) {
+      state.voidState = data.createVoidState();
+    }
+    state.voidState.unlocked = true;
+    state.voidState.isInVoidBattle = true;
+    state.voidState.encounters += 1;
+    var voidStats = effects.calculateVoidBossStats();
+    return battle.startBattle(state, {
+      rank: voidStats.rank,
+      name: voidStats.name,
+      hp: voidStats.hp,
+      attack: voidStats.attack,
+      defense: voidStats.defense,
+      speed: voidStats.speed,
+      rewardMin: 0,
+      rewardMax: 0,
+      isBoss: true,
+      isVoidBattle: true,
+      hideStats: true
+    });
+  }
+
   function buyZeroRelic(state) {
     var zeroRelic = state.zeroRelicState || data.createZeroRelicState();
     var baseCost = 100000;
@@ -277,6 +404,7 @@
     Object.keys(data.ACHIEVEMENT_INDEX || {}).forEach(function (achievementId) {
       if (
         achievementId.indexOf("infinity") !== -1 ||
+        achievementId.indexOf("void") !== -1 ||
         achievementId.indexOf("zero") !== -1 ||
         achievementId.indexOf("rebirth_") === 0
       ) {
@@ -355,6 +483,10 @@
     nextState.zeroRelicState.purchasedThisLife = false;
     nextState.permanentRelics = JSON.parse(JSON.stringify(state.permanentRelics || nextState.permanentRelics));
     nextState.zeroSlimeRecords = JSON.parse(JSON.stringify(state.zeroSlimeRecords || nextState.zeroSlimeRecords));
+    nextState.voidState = JSON.parse(JSON.stringify(state.voidState || nextState.voidState));
+    nextState.voidState.isInVoidBattle = false;
+    nextState.voidStatPenalty = JSON.parse(JSON.stringify(state.voidStatPenalty || nextState.voidStatPenalty));
+    nextState.voidBattleState = data.createVoidBattleState();
     nextState.infinityCount = state.infinityCount || 0;
     nextState.infinityExecuted = state.infinityExecuted === true;
     nextState.infinityHistory = JSON.parse(JSON.stringify(state.infinityHistory || nextState.infinityHistory));
@@ -398,6 +530,11 @@
     rollAltarEvent: rollAltarEvent,
     startAltarEvent: startAltarEvent,
     obtainAltarRelic: obtainAltarRelic,
+    canEvolveRelic: canEvolveRelic,
+    evolveRelic: evolveRelic,
+    isVoidUnlocked: isVoidUnlocked,
+    getVoidWarningText: getVoidWarningText,
+    challengeVoid: challengeVoid,
     buyZeroRelic: buyZeroRelic,
     executeRebirth: executeRebirth,
     getNextRebirthBonusPreview: getNextRebirthBonusPreview

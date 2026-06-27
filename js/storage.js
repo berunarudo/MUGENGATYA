@@ -169,7 +169,12 @@
     return {
       defeatedSsrBugWithoutUr: source.defeatedSsrBugWithoutUr === true,
       threeBugSpawnsWithinTen: source.threeBugSpawnsWithinTen === true,
-      subPoint001RelicFound: source.subPoint001RelicFound === true
+      subPoint001RelicFound: source.subPoint001RelicFound === true,
+      voidStatLossTaken: source.voidStatLossTaken === true,
+      randomGodJudgmentSeen: source.randomGodJudgmentSeen === true,
+      randomGodResetSeen: source.randomGodResetSeen === true,
+      voidDungeonFailed: source.voidDungeonFailed === true,
+      voidDungeonEntered: source.voidDungeonEntered === true
     };
   }
 
@@ -243,7 +248,13 @@
       unlockedSlimeRanks: unlocked,
       highestDefeatedSlimeRank: typeof source.highestDefeatedSlimeRank === "string" ? source.highestDefeatedSlimeRank : null,
       dungeonRateBonus: Math.max(1, clampNumber(source.dungeonRateBonus, 1)),
-      isInfiniteDungeon: source.isInfiniteDungeon === true
+      isInfiniteDungeon: source.isInfiniteDungeon === true,
+      isVoidDungeon: source.isVoidDungeon === true,
+      currentBattleIndex: Math.max(0, Math.floor(clampNumber(source.currentBattleIndex, 0))),
+      maxBattleCount: Math.max(0, Math.floor(clampNumber(source.maxBattleCount, 0))),
+      defeatedCount: Math.max(0, Math.floor(clampNumber(source.defeatedCount, 0))),
+      isCompleted: source.isCompleted === true,
+      endedAt: source.endedAt == null ? null : clampNumber(source.endedAt, null)
     };
   }
 
@@ -254,6 +265,24 @@
       fallback[key] = Math.max(0, clampNumber(source[key], fallback[key]));
     });
     return fallback;
+  }
+
+  function normalizeInfinityRateGrowthMap(rawMap) {
+    var result = {};
+    var source = rawMap && typeof rawMap === "object" ? rawMap : {};
+    (data.INFINITY_RATE_RANKS || []).forEach(function (rank) {
+      result[rank] = Math.max(0, clampNumber(source[rank], 0));
+    });
+    return result;
+  }
+
+  function normalizeInfinityBugRecords(rawRecords) {
+    var source = rawRecords && typeof rawRecords === "object" ? rawRecords : {};
+    return {
+      encounters: Math.max(0, Math.floor(clampNumber(source.encounters, 0))),
+      defeats: Math.max(0, Math.floor(clampNumber(source.defeats, 0))),
+      firstDefeatedAt: source.firstDefeatedAt == null ? null : clampNumber(source.firstDefeatedAt, null)
+    };
   }
 
   function normalizeDungeonRecords(rawRecords) {
@@ -307,8 +336,100 @@
     return {
       infinity_slime_relic: {
         owned: Boolean(source.infinity_slime_relic && source.infinity_slime_relic.owned),
-        enabled: Boolean(source.infinity_slime_relic && source.infinity_slime_relic.enabled)
+        enabled: Boolean(source.infinity_slime_relic && source.infinity_slime_relic.enabled),
+        count: 1,
+        limitBreak: 0
+      },
+      zero_ending_relic: {
+        owned: Boolean(source.zero_ending_relic && source.zero_ending_relic.owned),
+        enabled: Boolean(source.zero_ending_relic && source.zero_ending_relic.enabled),
+        count: Math.max(Boolean(source.zero_ending_relic && source.zero_ending_relic.owned) ? 1 : 0, Math.floor(clampNumber(source.zero_ending_relic && source.zero_ending_relic.count, fallback.zero_ending_relic.count))),
+        limitBreak: Math.max(0, Math.floor(clampNumber(source.zero_ending_relic && source.zero_ending_relic.limitBreak, fallback.zero_ending_relic.limitBreak)))
+      },
+      if_random_relic: {
+        owned: Boolean(source.if_random_relic && source.if_random_relic.owned),
+        enabled: Boolean(source.if_random_relic && source.if_random_relic.enabled),
+        count: 1,
+        limitBreak: 0
       }
+    };
+  }
+
+  function normalizeVoidState(rawState) {
+    var fallback = data.createVoidState();
+    var source = rawState && typeof rawState === "object" ? rawState : {};
+    return {
+      unlocked: source.unlocked === true,
+      isInVoidBattle: source.isInVoidBattle === true,
+      encounters: Math.max(0, Math.floor(clampNumber(source.encounters, fallback.encounters))),
+      defeats: Math.max(0, Math.floor(clampNumber(source.defeats, fallback.defeats))),
+      firstDefeatedAt: source.firstDefeatedAt == null ? null : clampNumber(source.firstDefeatedAt, null)
+    };
+  }
+
+  function normalizeVoidBattleState(rawState) {
+    var fallback = data.createVoidBattleState();
+    var source = rawState && typeof rawState === "object" ? rawState : {};
+    return {
+      turnCount: Math.max(0, Math.floor(clampNumber(source.turnCount, fallback.turnCount))),
+      voidActionCount: Math.max(0, Math.floor(clampNumber(source.voidActionCount, fallback.voidActionCount))),
+      playerActionCount: Math.max(0, Math.floor(clampNumber(source.playerActionCount, fallback.playerActionCount))),
+      randomGodActionCount: Math.max(0, Math.floor(clampNumber(source.randomGodActionCount, fallback.randomGodActionCount))),
+      initialPlayerMaxHp: Math.max(0, Math.floor(clampNumber(source.initialPlayerMaxHp, fallback.initialPlayerMaxHp))),
+      initialEnemyMaxHp: Math.max(0, Math.floor(clampNumber(source.initialEnemyMaxHp, fallback.initialEnemyMaxHp))),
+      initialEnemyAttack: Math.max(0, Math.floor(clampNumber(source.initialEnemyAttack, fallback.initialEnemyAttack))),
+      initialEnemyDefense: Math.max(0, Math.floor(clampNumber(source.initialEnemyDefense, fallback.initialEnemyDefense))),
+      initialEnemySpeed: Math.max(0, Math.floor(clampNumber(source.initialEnemySpeed, fallback.initialEnemySpeed)))
+    };
+  }
+
+  function normalizeVoidDungeonState(rawState) {
+    var fallback = data.createVoidDungeonState();
+    var source = rawState && typeof rawState === "object" ? rawState : {};
+    return {
+      isInVoidDungeon: source.isInVoidDungeon === true,
+      currentBattleIndex: Math.max(0, Math.floor(clampNumber(source.currentBattleIndex, fallback.currentBattleIndex))),
+      maxBattleCount: Math.max(1, Math.floor(clampNumber(source.maxBattleCount, fallback.maxBattleCount))),
+      defeatedCount: Math.max(0, Math.floor(clampNumber(source.defeatedCount, fallback.defeatedCount))),
+      isCompleted: source.isCompleted === true,
+      startedAt: source.startedAt == null ? null : clampNumber(source.startedAt, null),
+      endedAt: source.endedAt == null ? null : clampNumber(source.endedAt, null)
+    };
+  }
+
+  function normalizeVoidSlimeRecords(rawState) {
+    var fallback = data.createVoidSlimeRecords();
+    var source = rawState && typeof rawState === "object" ? rawState : {};
+    var result = {
+      encounters: Math.max(0, Math.floor(clampNumber(source.encounters, fallback.encounters))),
+      defeats: Math.max(0, Math.floor(clampNumber(source.defeats, fallback.defeats))),
+      defeatByRank: Object.assign({}, fallback.defeatByRank)
+    };
+    Object.keys(result.defeatByRank).forEach(function (rank) {
+      result.defeatByRank[rank] = Math.max(0, Math.floor(clampNumber(source.defeatByRank && source.defeatByRank[rank], result.defeatByRank[rank])));
+    });
+    return result;
+  }
+
+  function normalizeRandomGodRecords(rawState) {
+    var fallback = data.createRandomGodRecords();
+    var source = rawState && typeof rawState === "object" ? rawState : {};
+    return {
+      encounters: Math.max(0, Math.floor(clampNumber(source.encounters, fallback.encounters))),
+      defeats: Math.max(0, Math.floor(clampNumber(source.defeats, fallback.defeats))),
+      sawJudgment: source.sawJudgment === true,
+      sawReset: source.sawReset === true,
+      firstDefeatedAt: source.firstDefeatedAt == null ? null : clampNumber(source.firstDefeatedAt, null)
+    };
+  }
+
+  function normalizeRandomRelicState(rawState) {
+    var fallback = data.createRandomRelicState();
+    var source = rawState && typeof rawState === "object" ? rawState : {};
+    return {
+      owned: source.owned === true,
+      enabled: source.enabled === true,
+      selectedRank: typeof source.selectedRank === "string" ? source.selectedRank : fallback.selectedRank
     };
   }
 
@@ -382,6 +503,13 @@
       zeroRelicState: normalizeZeroRelicState(state.zeroRelicState),
       permanentRelics: normalizePermanentRelics(state.permanentRelics),
       zeroSlimeRecords: normalizeZeroSlimeRecords(state.zeroSlimeRecords),
+      voidState: normalizeVoidState(state.voidState),
+      voidStatPenalty: normalizeDungeonStatBonus(state.voidStatPenalty),
+      voidBattleState: normalizeVoidBattleState(state.voidBattleState),
+      voidDungeonState: normalizeVoidDungeonState(state.voidDungeonState),
+      voidSlimeRecords: normalizeVoidSlimeRecords(state.voidSlimeRecords),
+      randomGodRecords: normalizeRandomGodRecords(state.randomGodRecords),
+      randomRelicState: normalizeRandomRelicState(state.randomRelicState),
       autoButtonState: normalizeAutoButtonState(state.autoButtonState),
       tutorialState: normalizeTutorialState(state.tutorialState),
       achievementState: normalizeAchievementState(state.achievementState),
@@ -399,6 +527,12 @@
       limitedRelicDiscovered: normalizeLimitedRelicDiscovered(state.limitedRelicDiscovered),
       highestObservedRank: typeof state.highestObservedRank === "string" ? state.highestObservedRank : null,
       observedIfProbability: state.observedIfProbability === true,
+      infinityBugUnlocked: state.infinityBugUnlocked === true,
+      infinityRateGrowth: Math.max(0, clampNumber(state.infinityRateGrowth, 0)),
+      randomRateGrowthByShard: normalizeInfinityRateGrowthMap(state.randomRateGrowthByShard),
+      creationRelicStatBonus: normalizeDungeonStatBonus(state.creationRelicStatBonus),
+      infinityBugRecords: normalizeInfinityBugRecords(state.infinityBugRecords),
+      evolutionCount: Math.max(0, Math.floor(clampNumber(state.evolutionCount, 0))),
       infinityCount: Math.max(0, Math.floor(clampNumber(state.infinityCount, 0))),
       infinityExecuted: state.infinityExecuted === true,
       specialLogUnlocked: state.specialLogUnlocked === true,
@@ -422,11 +556,18 @@
 
     if (normalized.ownedRelics.er_infinity_gate) {
       normalized.ifUnlocked = true;
+      normalized.infinityBugUnlocked = true;
       normalized.bugLimitedRelicObtained.ER = true;
       normalized.limitedRelicDiscovered.er_infinity_gate = true;
     }
     if (normalized.ownedRelics.if_infinity) {
       normalized.ifRelicObtained = true;
+    }
+    if (normalized.ownedRelics.if_infinity || normalized.infinityCount >= 1) {
+      normalized.voidState.unlocked = true;
+    }
+    if (normalized.observedIfProbability) {
+      normalized.infinityBugUnlocked = true;
     }
     if (normalized.zeroRelicState.count > 0) {
       normalized.zeroRelicState.owned = true;
@@ -437,6 +578,16 @@
     }
     if (normalized.permanentRelics.infinity_slime_relic.owned && normalized.discoveredRelics.indexOf("infinity_slime_relic") === -1) {
       normalized.discoveredRelics.push("infinity_slime_relic");
+    }
+    if (normalized.permanentRelics.zero_ending_relic.owned && normalized.discoveredRelics.indexOf("zero_ending_relic") === -1) {
+      normalized.discoveredRelics.push("zero_ending_relic");
+    }
+    if (normalized.permanentRelics.if_random_relic.owned) {
+      normalized.randomRelicState.owned = true;
+      normalized.randomRelicState.enabled = normalized.permanentRelics.if_random_relic.enabled !== false;
+      if (normalized.discoveredRelics.indexOf("if_random_relic") === -1) {
+        normalized.discoveredRelics.push("if_random_relic");
+      }
     }
     if (normalized.ownedRelics.ir_abyss_bug_slayer) {
       normalized.bugLimitedRelicObtained.IR = true;

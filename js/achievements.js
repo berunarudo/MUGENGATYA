@@ -35,6 +35,30 @@
         return state.totalBugDefeats || 0;
       case "bugRankDefeat":
         return (state.defeatedBugCounts && state.defeatedBugCounts[achievement.targetRank]) || 0;
+      case "infinityBugEncounters":
+        return (state.infinityBugRecords && state.infinityBugRecords.encounters) || 0;
+      case "infinityBugDefeats":
+        return (state.infinityBugRecords && state.infinityBugRecords.defeats) || 0;
+      case "voidEncounters":
+        return (state.voidState && state.voidState.encounters) || 0;
+      case "voidDefeats":
+        return (state.voidState && state.voidState.defeats) || 0;
+      case "enteredVoidDungeon":
+        return (state.dungeonRecords && state.dungeonRecords.enteredVoidDungeon) || 0;
+      case "completedVoidDungeon":
+        return (state.dungeonRecords && state.dungeonRecords.completedVoidDungeon) || 0;
+      case "failedVoidDungeon":
+        return (state.dungeonRecords && state.dungeonRecords.failedVoidDungeon) || 0;
+      case "voidSlimeEncounters":
+        return (state.voidSlimeRecords && state.voidSlimeRecords.encounters) || 0;
+      case "voidSlimeTotalDefeats":
+        return (state.voidSlimeRecords && state.voidSlimeRecords.defeats) || 0;
+      case "voidSlimeRankDefeat":
+        return (state.voidSlimeRecords && state.voidSlimeRecords.defeatByRank && state.voidSlimeRecords.defeatByRank[achievement.targetRank]) || 0;
+      case "randomGodEncounters":
+        return (state.randomGodRecords && state.randomGodRecords.encounters) || 0;
+      case "randomGodDefeats":
+        return (state.randomGodRecords && state.randomGodRecords.defeats) || 0;
       case "totalMiningCount":
         return (state.dungeonRecords && state.dungeonRecords.totalMiningCount) || 0;
       case "totalGemCount":
@@ -63,6 +87,14 @@
         return state.totalDecomposeStone || 0;
       case "highestRelicRankAtLeast":
         return state.highestRelicRank ? (data.isRankAtLeast(state.highestRelicRank, achievement.targetRank) ? 1 : 0) : 0;
+      case "hasRelic":
+        return state.ownedRelics && state.ownedRelics[achievement.targetRelicId] ? 1 : 0;
+      case "hasPermanentRelic":
+        return state.permanentRelics && state.permanentRelics[achievement.targetRelicId] && state.permanentRelics[achievement.targetRelicId].owned ? 1 : 0;
+      case "permanentRelicLimitBreak":
+        return state.permanentRelics && state.permanentRelics[achievement.targetRelicId] ? (state.permanentRelics[achievement.targetRelicId].limitBreak || 0) : 0;
+      case "evolutionCount":
+        return state.evolutionCount || 0;
       case "rankTotalLimitBreak":
         return effects.getRankTotalLimitBreak(achievement.targetRank, state);
       case "specialFlag":

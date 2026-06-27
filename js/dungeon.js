@@ -22,6 +22,9 @@
     if (type === "dimensional") {
       return state.dungeonRecords.enteredDimensionalDungeon || 0;
     }
+    if (type === "void") {
+      return state.dungeonRecords.enteredVoidDungeon || 0;
+    }
     return 0;
   }
 
@@ -99,6 +102,10 @@
     if (isInDungeon(state)) {
       return { ok: false, logs: ["すでにダンジョンに入場しています。"] };
     }
+    if (type === "void") {
+      return enterVoidDungeon(state);
+    }
+
     var cost = getDungeonCost(state, type);
     var baseCost = Math.floor(config.cost * Math.pow(2, getDungeonEnterCount(state, type)));
     if (state.stones < cost) {
@@ -152,7 +159,188 @@
     state.pendingBugSourceRank = null;
     state.isBattle = false;
     state.battleState = null;
+    if (state.voidDungeonState) {
+      state.voidDungeonState.isInVoidDungeon = false;
+      state.voidDungeonState.endedAt = Date.now();
+    }
     return logs;
+  }
+
+  function ensureVoidDungeonCollections(state) {
+    ensureDungeonCollections(state);
+    if (!state.voidDungeonState) {
+      state.voidDungeonState = data.createVoidDungeonState();
+    }
+    if (!state.voidSlimeRecords) {
+      state.voidSlimeRecords = data.createVoidSlimeRecords();
+    }
+    if (!state.randomGodRecords) {
+      state.randomGodRecords = data.createRandomGodRecords();
+    }
+  }
+
+  function canEnterVoidDungeon(state) {
+    var relic = state.ownedRelics && state.ownedRelics[data.VOID_DUNGEON_CONFIG.requiredRelicId];
+    if (!relic) {
+      return { ok: false, reason: "ER虚無の遺物を所持していません。" };
+    }
+    return { ok: true, warning: relic.enabled === false ? "ER虚無の遺物がOFFです。侵食を防げません。" : "" };
+  }
+
+  function getVoidSlimeRankByBattleIndex(index) {
+    return data.VOID_SLIME_RANK_ORDER[Math.max(0, index - 1)] || "ER";
+  }
+
+  function getVoidSlimeStats(rank) {
+    var base = data.BUG_RANK_INDEX["∞"];
+    var multiplier = data.VOID_SLIME_RANK_MULTIPLIER[rank] || 1;
+    return {
+      rank: rank,
+      name: rank + "虚無スライム",
+      hp: Math.max(1, Math.floor(base.hp * multiplier)),
+      attack: Math.max(1, Math.floor(base.attack * multiplier)),
+      defense: Math.max(1, Math.floor(base.defense * multiplier)),
+      speed: Math.max(1, Math.floor(base.speed * multiplier)),
+      isBoss: true,
+      isVoidSlimeBattle: true
+    };
+  }
+
+  function startVoidSlimeBattle(state, rank) {
+    var battleModule = window.InfinityGachaBattle;
+    var enemy = getVoidSlimeStats(rank);
+    state.voidSlimeRecords.encounters += 1;
+    return battleModule.startBattle(state, {
+      rank: enemy.rank,
+      name: enemy.name,
+      hp: enemy.hp,
+      attack: enemy.attack,
+      defense: enemy.defense,
+      speed: enemy.speed,
+      rewardMin: 0,
+      rewardMax: 0,
+      isBoss: true,
+      isVoidBattle: true,
+      isVoidSlimeBattle: true,
+      hideStats: false
+    });
+  }
+
+  function startRandomGodBattle(state) {
+    var battleModule = window.InfinityGachaBattle;
+    state.randomGodRecords.encounters += 1;
+    return battleModule.startBattle(state, {
+      rank: data.RANDOM_GOD.rank,
+      name: data.RANDOM_GOD.name,
+      hp: data.RANDOM_GOD.hp,
+      attack: data.RANDOM_GOD.attack,
+      defense: data.RANDOM_GOD.defense,
+      speed: data.RANDOM_GOD.speed,
+      rewardMin: 0,
+      rewardMax: 0,
+      isBoss: true,
+      isVoidBattle: true,
+      isRandomGodBattle: true,
+      hideStats: false
+    });
+  }
+
+  function startNextVoidDungeonBattle(state) {
+    ensureVoidDungeonCollections(state);
+    if (!state.voidDungeonState.isInVoidDungeon) {
+      return { ok: false, logs: ["虚無のダンジョンに入っていません。"] };
+    }
+    var index = state.voidDungeonState.currentBattleIndex;
+    var logs = [index + "戦目。"];
+    var outcome;
+    if (index >= data.VOID_DUNGEON_CONFIG.maxBattleCount) {
+      logs.push("乱数の神が現れた。");
+      logs.push("この戦闘では、次に何が起こるか誰にも分からない。");
+      outcome = startRandomGodBattle(state);
+    } else {
+      var rank = getVoidSlimeRankByBattleIndex(index);
+      logs.push(rank + "虚無スライムが現れた。");
+      if (rank === "ER") {
+        logs.push("虚無の濃度が限界に近づいている。");
+      }
+      outcome = startVoidSlimeBattle(state, rank);
+    }
+    return { ok: true, logs: logs.concat((outcome && outcome.logs) || []) };
+  }
+
+  function enterVoidDungeon(state) {
+    ensureVoidDungeonCollections(state);
+    var enterCheck = canEnterVoidDungeon(state);
+    if (!enterCheck.ok) {
+      return { ok: false, logs: [enterCheck.reason] };
+    }
+    state.dungeonState = data.createDungeonState();
+    state.dungeonState.isInDungeon = true;
+    state.dungeonState.type = "void";
+    state.dungeonState.name = data.DUNGEON_TYPES.void.name;
+    state.dungeonState.startedAt = Date.now();
+    state.dungeonState.isInfiniteDungeon = true;
+    state.dungeonState.isVoidDungeon = true;
+    state.dungeonState.currentBattleIndex = 1;
+    state.dungeonState.maxBattleCount = data.VOID_DUNGEON_CONFIG.maxBattleCount;
+    state.voidDungeonState = data.createVoidDungeonState();
+    state.voidDungeonState.isInVoidDungeon = true;
+    state.voidDungeonState.currentBattleIndex = 1;
+    state.voidDungeonState.startedAt = Date.now();
+    state.dungeonRecords.enteredVoidDungeon += 1;
+    state.specialFlags.voidDungeonEntered = true;
+    var logs = data.DUNGEON_TYPES.void.altarLogs.slice();
+    if (enterCheck.warning) {
+      logs.push(enterCheck.warning);
+    }
+    var battleOutcome = startNextVoidDungeonBattle(state);
+    Array.prototype.push.apply(logs, battleOutcome.logs || []);
+    return { ok: true, logs: logs };
+  }
+
+  function finishVoidDungeonBattleWin(state, battleState) {
+    ensureVoidDungeonCollections(state);
+    var logs = [];
+    if (battleState.isRandomGodBattle) {
+      state.randomGodRecords.defeats += 1;
+      if (state.randomGodRecords.firstDefeatedAt == null) {
+        state.randomGodRecords.firstDefeatedAt = Date.now();
+      }
+      state.dungeonRecords.completedVoidDungeon += 1;
+      state.voidDungeonState.isInVoidDungeon = false;
+      state.voidDungeonState.isCompleted = true;
+      state.voidDungeonState.endedAt = Date.now();
+      state.dungeonState = data.createDungeonState();
+      logs.push("乱数の神を撃破した。");
+      logs.push("確率は、ついに操作される側になった。");
+      logs.push("虚無のダンジョンを踏破しました。");
+      return logs;
+    }
+    state.voidSlimeRecords.defeats += 1;
+    state.voidSlimeRecords.defeatByRank[battleState.bugRank] = (state.voidSlimeRecords.defeatByRank[battleState.bugRank] || 0) + 1;
+    state.voidDungeonState.defeatedCount += 1;
+    state.voidDungeonState.currentBattleIndex += 1;
+    state.dungeonState.currentBattleIndex = state.voidDungeonState.currentBattleIndex;
+    state.dungeonState.defeatedCount = state.voidDungeonState.defeatedCount;
+    logs.push(battleState.bugName + "を撃破した。");
+    logs.push("次の虚無が現れる。");
+    var nextOutcome = startNextVoidDungeonBattle(state);
+    Array.prototype.push.apply(logs, nextOutcome.logs || []);
+    return logs;
+  }
+
+  function finishVoidDungeonLose(state) {
+    ensureVoidDungeonCollections(state);
+    state.dungeonRecords.failedVoidDungeon += 1;
+    state.specialFlags.voidDungeonFailed = true;
+    state.voidDungeonState.isInVoidDungeon = false;
+    state.voidDungeonState.endedAt = Date.now();
+    state.dungeonState = data.createDungeonState();
+    return [
+      "虚無のダンジョンで敗北した。",
+      "戦闘は終了した。",
+      "削られたステータスは戻らない。"
+    ];
   }
 
   function checkDungeonTime(state) {
@@ -498,6 +686,9 @@
     if (!isInDungeon(state)) {
       return { ok: false, logs: ["ダンジョンに入っていません。"] };
     }
+    if (state.dungeonState.type === "void") {
+      return { ok: false, logs: ["虚無のダンジョンでは採掘できません。"] };
+    }
 
     var config = getCurrentDungeonConfig(state);
     var logs = [config.minePrefix];
@@ -533,6 +724,15 @@
   function renderDungeonStatus(state) {
     if (!isInDungeon(state)) {
       return "";
+    }
+
+    if (state.dungeonState.type === "void") {
+      return '<div class="box-block"><h3>虚無のダンジョン</h3><div class="detail-grid">' +
+        '<span class="detail-label">進行</span><span class="detail-value">' + state.voidDungeonState.currentBattleIndex + ' / ' + state.voidDungeonState.maxBattleCount + '</span>' +
+        '<span class="detail-label">撃破数</span><span class="detail-value">' + state.voidDungeonState.defeatedCount + '</span>' +
+        '<span class="detail-label">状態</span><span class="detail-value">戦闘のみ</span>' +
+        '<span class="detail-label">採掘</span><span class="detail-value">不可</span>' +
+        '</div></div>';
     }
 
     var remaining = state.dungeonState.endsAt ? formatDungeonTime(getRemainingTimeMs(state, Date.now())) : "戦闘敗北まで";
@@ -573,6 +773,15 @@
     shouldSpawnZeroSlime: shouldSpawnZeroSlime,
     getInfinitySlimeStats: getInfinitySlimeStats,
     getZeroSlimeStats: getZeroSlimeStats,
+    canEnterVoidDungeon: canEnterVoidDungeon,
+    enterVoidDungeon: enterVoidDungeon,
+    startNextVoidDungeonBattle: startNextVoidDungeonBattle,
+    startVoidSlimeBattle: startVoidSlimeBattle,
+    startRandomGodBattle: startRandomGodBattle,
+    finishVoidDungeonBattleWin: finishVoidDungeonBattleWin,
+    finishVoidDungeonLose: finishVoidDungeonLose,
+    getVoidSlimeRankByBattleIndex: getVoidSlimeRankByBattleIndex,
+    getVoidSlimeStats: getVoidSlimeStats,
     canDamageInfinitySlime: canDamageInfinitySlime,
     renderDungeonStatus: renderDungeonStatus,
     formatDungeonTime: formatDungeonTime

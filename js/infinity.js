@@ -35,6 +35,7 @@
     Object.keys(data.ACHIEVEMENT_INDEX || {}).forEach(function (achievementId) {
       if (
         achievementId.indexOf("infinity") !== -1 ||
+        achievementId.indexOf("void") !== -1 ||
         achievementId.indexOf("zero") !== -1 ||
         achievementId.indexOf("rebirth_") === 0
       ) {
@@ -92,6 +93,9 @@
     nextState.zeroRelicState = JSON.parse(JSON.stringify(state.zeroRelicState || data.createZeroRelicState()));
     nextState.permanentRelics = JSON.parse(JSON.stringify(state.permanentRelics || data.createPermanentRelics()));
     nextState.zeroSlimeRecords = JSON.parse(JSON.stringify(state.zeroSlimeRecords || data.createZeroSlimeRecords()));
+    nextState.voidState = JSON.parse(JSON.stringify(state.voidState || data.createVoidState()));
+    nextState.voidStatPenalty = JSON.parse(JSON.stringify(state.voidStatPenalty || data.createDungeonStatBonus()));
+    nextState.voidBattleState = data.createVoidBattleState();
     nextState.tutorialState = JSON.parse(JSON.stringify(state.tutorialState || nextState.tutorialState));
     nextState.highestRelicRank = null;
     nextState.highestObservedRank = null;
@@ -106,6 +110,7 @@
     nextState.infinityExecuted = true;
     nextState.specialLogUnlocked = state.specialLogUnlocked === true || state.ifRelicObtained === true;
     nextState.ifRelicObtained = false;
+    nextState.voidState.isInVoidBattle = false;
     nextState.infinityHistory = history;
     nextState.normalLoopStartAt = Date.now();
     nextState.logs = [];

@@ -236,6 +236,17 @@
       bonus_bug_relic_drop_qr: "QR以上追加遺物",
       bonus_bug_relic_drop_ir: "IR以上追加遺物",
       if_unlock: "IF表示解放",
+      infinity_bug_damage_reduction: "∞バグ被ダメ軽減",
+      infinity_bug_damage_bonus: "∞バグ与ダメ上昇",
+      set_infinity_bug_defense: "∞バグ防御固定",
+      infinity_rate_growth_per_gacha: "∞確率成長",
+      random_rate_growth: "ランダム確率成長",
+      double_random_rate_growth: "ランダム確率成長倍率",
+      all_stats_growth_after_bug_win: "バグ勝利後全能力成長",
+      void_stat_loss_reduce_to_one: "虚無侵食抑制",
+      minimum_base_rate: "最低基礎確率",
+      selective_rate_control: "乱数操作",
+      all_stats: "全ステータス",
       bug_spawn_add: "バグ出現率加算",
       bug_spawn_subtract: "バグ出現率減少",
       battle_victory_heal: "勝利時回復",
@@ -263,6 +274,8 @@
       var currentValue;
       if (effect.effectType === "free_gacha_interval") {
         currentValue = effect.value;
+      } else if (effect.effectType === "special" && effect.target === "minimum_base_rate") {
+        currentValue = Math.min(50, effect.value + Math.max(0, (ownedData ? ownedData.count : 1) - 1));
       } else if (
         effect.effectType === "final_rate_multiplier" ||
         effect.effectType === "stone_gain_multiplier" ||
@@ -322,6 +335,15 @@
     return permanentRelics[relicId] || { owned: false, enabled: false };
   }
 
+  function hasVoidRelic(state) {
+    var relic = state && state.ownedRelics ? state.ownedRelics.er_void_relic : null;
+    return Boolean(relic && relic.enabled !== false);
+  }
+
+  function isVoidLikeBattle(battleState) {
+    return Boolean(battleState && (battleState.isVoidBattle || battleState.isVoidSlimeBattle));
+  }
+
   function calculateZeroRelicGrowthMultiplier(stateOrLimitBreak) {
     var limitBreak = typeof stateOrLimitBreak === "number"
       ? stateOrLimitBreak
@@ -353,6 +375,27 @@
     return 0.01 * calculateZeroRelicGrowthMultiplier(zeroRelic.limitBreak || 0);
   }
 
+  function calculateZeroEndingMinimumBaseRate(state) {
+    var relic = getPermanentRelicState(state, "zero_ending_relic");
+    if (!relic.owned || relic.enabled === false) {
+      return 0;
+    }
+    return Math.min(50, 1 + Math.max(0, relic.limitBreak || 0));
+  }
+
+  function applyZeroEndingMinimumBaseRate(baseRate, state) {
+    return Math.max(baseRate, calculateZeroEndingMinimumBaseRate(state));
+  }
+
+  function calculateRandomRelicRateMultiplier(state, rank) {
+    var relic = getPermanentRelicState(state, "if_random_relic");
+    var randomRelicState = state && state.randomRelicState ? state.randomRelicState : data.createRandomRelicState();
+    if (!relic.owned || relic.enabled === false || !randomRelicState.owned || randomRelicState.enabled === false) {
+      return 1;
+    }
+    return randomRelicState.selectedRank === rank ? 10 : 1;
+  }
+
   function getSlimeGrowthMultiplier(state) {
     var permanentRelic = getPermanentRelicState(state, "infinity_slime_relic");
     return permanentRelic.owned && permanentRelic.enabled !== false ? 2 : 1;
@@ -367,7 +410,7 @@
       return value;
     }
 
-    if (effectType === "special" && (target === "if_unlock" || target === "infinity_trigger")) {
+    if (effectType === "special" && (target === "if_unlock" || target === "infinity_trigger" || target === "set_infinity_bug_defense" || target === "minimum_base_rate" || target === "void_stat_loss_reduce_to_one")) {
       return value;
     }
 
@@ -435,8 +478,18 @@
         var permanentRelic = getPermanentRelicState(state, relic.id);
         if (permanentRelic.owned) {
           ownedData = {
-            count: 1,
+            count: Math.max(1, permanentRelic.count || 1),
             enabled: permanentRelic.enabled !== false,
+            acquiredOrder: 0
+          };
+        }
+      }
+      if (!ownedData && relic.permanent === true && relic.id !== "infinity_slime_relic") {
+        var genericPermanentRelic = getPermanentRelicState(state, relic.id);
+        if (genericPermanentRelic.owned) {
+          ownedData = {
+            count: Math.max(1, genericPermanentRelic.count || 1),
+            enabled: genericPermanentRelic.enabled !== false,
             acquiredOrder: 0
           };
         }
@@ -486,6 +539,8 @@
     switch (effectInfo.effectType) {
       case "stat_flat":
         return { category: "加算", target: statName(effectInfo.target), currentLabel: statName(effectInfo.target) + "+" + current, baseLabel: statName(effectInfo.target) + "+" + base };
+      case "all_stats_flat":
+        return { category: "全能力加算", target: "全ステータス", currentLabel: "全ステータス+" + current, baseLabel: "全ステータス+" + base };
       case "stat_multiplier":
         return { category: "乗算", target: statName(effectInfo.target), currentLabel: statName(effectInfo.target) + "+" + roundDisplay(current * 100) + "%", baseLabel: statName(effectInfo.target) + "+" + roundDisplay(base * 100) + "%" };
       case "rate_add":
@@ -569,6 +624,36 @@
         if (effectInfo.target === "slime_growth_multiplier") {
           return { category: "特殊", target: "スライム", currentLabel: "スライム成長" + current + "倍", baseLabel: "スライム成長" + base + "倍" };
         }
+        if (effectInfo.target === "infinity_bug_damage_reduction") {
+          return { category: "特殊", target: "∞バグ", currentLabel: "∞バグ被ダメ-" + roundDisplay(current * 100) + "%", baseLabel: "∞バグ被ダメ-" + roundDisplay(base * 100) + "%" };
+        }
+        if (effectInfo.target === "infinity_bug_damage_bonus") {
+          return { category: "特殊", target: "∞バグ", currentLabel: "∞バグ与ダメ+" + roundDisplay(current * 100) + "%", baseLabel: "∞バグ与ダメ+" + roundDisplay(base * 100) + "%" };
+        }
+        if (effectInfo.target === "set_infinity_bug_defense") {
+          return { category: "特殊", target: "∞バグ", currentLabel: "∞バグ防御を" + current + "に固定", baseLabel: "∞バグ防御を" + base + "に固定" };
+        }
+        if (effectInfo.target === "infinity_rate_growth_per_gacha") {
+          return { category: "特殊", target: "∞確率", currentLabel: "1回ごとに∞確率+" + formatRateDisplay(current), baseLabel: "1回ごとに∞確率+" + formatRateDisplay(base) };
+        }
+        if (effectInfo.target === "random_rate_growth") {
+          return { category: "特殊", target: "確率", currentLabel: "1回ごとにランダム確率+" + formatRateDisplay(current), baseLabel: "1回ごとにランダム確率+" + formatRateDisplay(base) };
+        }
+        if (effectInfo.target === "double_random_rate_growth") {
+          return { category: "特殊", target: "確率", currentLabel: "ランダム確率成長" + current + "倍", baseLabel: "ランダム確率成長" + base + "倍" };
+        }
+        if (effectInfo.target === "all_stats_growth_after_bug_win") {
+          return { category: "特殊", target: "バグ勝利", currentLabel: "勝利後に全ステータス成長", baseLabel: "勝利後に全ステータス成長" };
+        }
+        if (effectInfo.target === "void_stat_loss_reduce_to_one") {
+          return { category: "特殊", target: "虚無", currentLabel: "虚無の侵食を1に抑える", baseLabel: "虚無の侵食を1に抑える" };
+        }
+        if (effectInfo.target === "minimum_base_rate") {
+          return { category: "特殊", target: "確率", currentLabel: "全基礎確率の最低値" + current + "%", baseLabel: "全基礎確率の最低値" + base + "%" };
+        }
+        if (effectInfo.target === "selective_rate_control") {
+          return { category: "特殊", target: "確率", currentLabel: "選択ランク最終確率" + current + "倍", baseLabel: "選択ランク最終確率" + base + "倍" };
+        }
         return { category: "特殊", target: target, currentLabel: String(current), baseLabel: String(base) };
       default:
         return { category: "その他", target: target, currentLabel: String(current), baseLabel: String(base) };
@@ -576,6 +661,8 @@
   }  function calculatePlayerStats(state) {
     var stats = Object.assign({}, data.BASE_STATS);
     var dungeonBonus = state && state.dungeonStatBonus ? state.dungeonStatBonus : data.createDungeonStatBonus();
+    var creationBonus = state && state.creationRelicStatBonus ? state.creationRelicStatBonus : data.createDungeonStatBonus();
+    var voidPenalty = state && state.voidStatPenalty ? state.voidStatPenalty : data.createDungeonStatBonus();
     var multipliers = { hp: 1, attack: 1, defense: 1, speed: 1, luck: 1 };
 
     stats.hp += dungeonBonus.hp || 0;
@@ -587,11 +674,30 @@
     stats.evasion += dungeonBonus.evasionRate || 0;
     stats.criticalRate += dungeonBonus.criticalRate || 0;
     stats.criticalDamage += dungeonBonus.criticalDamage || 0;
+    stats.hp += creationBonus.hp || 0;
+    stats.attack += creationBonus.attack || 0;
+    stats.defense += creationBonus.defense || 0;
+    stats.speed += creationBonus.speed || 0;
+    stats.luck += creationBonus.luck || 0;
+    stats.accuracy += creationBonus.accuracy || 0;
+    stats.evasion += creationBonus.evasionRate || 0;
+    stats.criticalRate += creationBonus.criticalRate || 0;
+    stats.criticalDamage += creationBonus.criticalDamage || 0;
 
     getOwnedRelicsByEnabled(state, true).forEach(function (view) {
       view.effectValues.forEach(function (effectInfo) {
         if (effectInfo.effectType === "stat_flat") {
           stats[effectInfo.target] += effectInfo.currentValue;
+        } else if (effectInfo.effectType === "all_stats_flat") {
+          stats.hp += effectInfo.currentValue;
+          stats.attack += effectInfo.currentValue;
+          stats.defense += effectInfo.currentValue;
+          stats.speed += effectInfo.currentValue;
+          stats.luck += effectInfo.currentValue;
+          stats.accuracy += effectInfo.currentValue;
+          stats.evasion += effectInfo.currentValue;
+          stats.criticalRate += effectInfo.currentValue;
+          stats.criticalDamage += effectInfo.currentValue;
         } else if (effectInfo.effectType === "stat_multiplier") {
           multipliers[effectInfo.target] *= 1 + effectInfo.currentValue;
         } else if (effectInfo.effectType === "accuracy_flat") {
@@ -609,6 +715,16 @@
     Object.keys(multipliers).forEach(function (key) {
       stats[key] = roundDisplay(stats[key] * multipliers[key]);
     });
+
+    stats.hp = Math.max(1, roundDisplay(stats.hp - (voidPenalty.hp || 0)));
+    stats.attack = Math.max(1, roundDisplay(stats.attack - (voidPenalty.attack || 0)));
+    stats.defense = Math.max(1, roundDisplay(stats.defense - (voidPenalty.defense || 0)));
+    stats.speed = Math.max(1, roundDisplay(stats.speed - (voidPenalty.speed || 0)));
+    stats.luck = Math.max(1, roundDisplay(stats.luck - (voidPenalty.luck || 0)));
+    stats.accuracy = Math.max(1, roundDisplay(stats.accuracy - (voidPenalty.accuracy || 0)));
+    stats.evasion = Math.max(0, roundDisplay(stats.evasion - (voidPenalty.evasionRate || 0)));
+    stats.criticalRate = Math.max(0, roundDisplay(stats.criticalRate - (voidPenalty.criticalRate || 0)));
+    stats.criticalDamage = Math.max(1, roundDisplay(stats.criticalDamage - (voidPenalty.criticalDamage || 0)));
 
     stats.evasion = roundDisplay(Math.min(65, stats.evasion));
     return stats;
@@ -772,6 +888,14 @@
     return buckets;
   }
 
+  function getRandomRateGrowthMap(state) {
+    var result = {};
+    (data.INFINITY_RATE_RANKS || []).forEach(function (rank) {
+      result[rank] = Math.max(0, state && state.randomRateGrowthByShard ? state.randomRateGrowthByShard[rank] || 0 : 0);
+    });
+    return result;
+  }
+
   function rankMatchesGroup(rank, group) {
     if (group === "all") {
       return rank !== "MISS";
@@ -792,6 +916,35 @@
       return rank === "ER";
     }
     return false;
+  }
+
+  function calculateVoidStatLoss(state, playerStats) {
+    var result = {};
+    var source = playerStats || calculatePlayerStats(state);
+    var reduceToOne = Boolean(state && state.ownedRelics && state.ownedRelics.er_void_relic && state.ownedRelics.er_void_relic.enabled !== false);
+    ["hp", "attack", "defense", "speed", "luck", "accuracy", "evasion", "criticalRate", "criticalDamage"].forEach(function (key) {
+      result[key] = reduceToOne ? 1 : Math.max(1, Math.floor((source[key] || 1) * 0.1));
+    });
+    return result;
+  }
+
+  function reduceVoidStatLoss(state, losses) {
+    if (!state.voidStatPenalty) {
+      state.voidStatPenalty = data.createDungeonStatBonus();
+    }
+    state.voidStatPenalty.hp += losses.hp || 0;
+    state.voidStatPenalty.attack += losses.attack || 0;
+    state.voidStatPenalty.defense += losses.defense || 0;
+    state.voidStatPenalty.speed += losses.speed || 0;
+    state.voidStatPenalty.luck += losses.luck || 0;
+    state.voidStatPenalty.accuracy += losses.accuracy || 0;
+    state.voidStatPenalty.evasionRate += losses.evasion || 0;
+    state.voidStatPenalty.criticalRate += losses.criticalRate || 0;
+    state.voidStatPenalty.criticalDamage += losses.criticalDamage || 0;
+  }
+
+  function calculateVoidBossStats() {
+    return Object.assign({}, data.VOID_BOSS);
   }
 
   function calculateFinalRateMultipliers(state) {
@@ -933,6 +1086,7 @@
   function calculateRateModifiers(state) {
     var buckets = createRateBuckets();
     var redirectToUr = 0;
+    var randomGrowth = getRandomRateGrowthMap(state);
 
     getOwnedRelicsByEnabled(state, true).forEach(function (view) {
       view.effectValues.forEach(function (effectInfo) {
@@ -961,7 +1115,8 @@
     }).map(function (rank) {
       var rebirthBaseRate = calculateBaseRateWithRebirth(rank.baseChance, state);
       var zeroRelicAdjustedBaseRate = rebirthBaseRate * zeroRelicRateMultiplier;
-      var baseRate = Math.max(0, zeroRelicAdjustedBaseRate + buckets[rank.key].add - buckets[rank.key].subtract + (rank.key === "UR" ? redirectToUr : 0));
+      var minimumAdjustedBaseRate = applyZeroEndingMinimumBaseRate(zeroRelicAdjustedBaseRate, state);
+      var baseRate = Math.max(0, minimumAdjustedBaseRate + buckets[rank.key].add - buckets[rank.key].subtract + (rank.key === "UR" ? redirectToUr : 0));
       var rateAfterNormalMultiplier = baseRate * highRare.allRareMultiplier;
       if (rankMatchesGroup(rank.key, "S_PLUS")) {
         rateAfterNormalMultiplier *= highRare.sPlusMultiplier;
@@ -982,20 +1137,25 @@
         rateAfterNormalMultiplier *= altarRateBonus[rank.key];
       }
       var bugDefeatMultiplier = bugDefeatBonuses[rank.key] || 1;
-      var finalRate = rateAfterNormalMultiplier * bugDefeatMultiplier;
+      var randomRelicMultiplier = calculateRandomRelicRateMultiplier(state, rank.key);
+      var finalRate = rateAfterNormalMultiplier * bugDefeatMultiplier * randomRelicMultiplier;
       return {
         rank: rank.key,
         label: rank.label,
         base: rank.baseChance,
         rebirthBase: rebirthBaseRate,
         zeroRelicAdjustedBase: zeroRelicAdjustedBaseRate,
+        minimumAdjustedBase: minimumAdjustedBaseRate,
         baseDisplay: rank.displayRate || formatRateDisplay(rank.baseChance),
         rebirthBaseDisplay: formatRateDisplay(rebirthBaseRate),
         zeroRelicAdjustedBaseDisplay: formatRateDisplay(zeroRelicAdjustedBaseRate),
+        minimumAdjustedBaseDisplay: formatRateDisplay(minimumAdjustedBaseRate),
         add: buckets[rank.key].add,
         subtract: buckets[rank.key].subtract,
+        shardGrowth: randomGrowth[rank.key] || 0,
         multiplier: roundDisplay(baseRate > 0 ? rateAfterNormalMultiplier / baseRate : 1),
         bugDefeatMultiplier: roundDisplay(bugDefeatMultiplier),
+        randomRelicMultiplier: roundDisplay(randomRelicMultiplier),
         altarMultiplier: roundDisplay(altarRateBonus[rank.key] || 1),
         final: finalRate
       };
@@ -1013,7 +1173,9 @@
       missRate: Math.max(0, 100 - occupied - highRare.missRateSubtractFlat),
       rebirthMultiplier: roundDisplay(rebirthMultiplier),
       zeroRelicRateMultiplier: roundDisplay(zeroRelicRateMultiplier),
+      zeroEndingMinimumBaseRate: calculateZeroEndingMinimumBaseRate(state),
       redirectToUr: roundDisplay(redirectToUr),
+      shardGrowthByRank: randomGrowth,
       multipliers: {
         allRare: roundDisplay(highRare.allRareMultiplier),
         sPlus: roundDisplay(highRare.sPlusMultiplier),
@@ -1299,9 +1461,18 @@
     if (battleState.isBoss) {
       multiplier += battleStats.damageBonus.bossBonus;
     }
+    if (battleState.bugRank === "∞" || battleState.isVoidSlimeBattle) {
+      multiplier += calculateInfinityBugDamageBonus(state);
+    }
     multiplier *= battleStats.damageFinalMultiplier;
-
-    return Math.max(1, Math.floor((baseDamage * multiplier) - battleState.bugDefense));
+    var bugDefense = battleState.bugDefense;
+    if (battleState.bugRank === "∞" || battleState.isVoidSlimeBattle) {
+      var overrideDefense = calculateInfinityBugDefenseOverride(state);
+      if (overrideDefense !== null) {
+        bugDefense = overrideDefense;
+      }
+    }
+    return Math.max(1, Math.floor((baseDamage * multiplier) - bugDefense));
   }
 
   function calculateBugDamage(state, battleState) {
@@ -1315,6 +1486,9 @@
     damage = Math.max(0, damage - battleStats.damageReduction.flat);
     damage = damage * (1 - battleStats.damageReduction.multiplier);
     damage = damage * battleStats.damageFinalReduction;
+    if (battleState.bugRank === "∞" || battleState.isVoidSlimeBattle) {
+      damage = damage * calculateInfinityBugDamageReduction(state).multiplier;
+    }
     return Math.max(1, Math.floor(damage));
   }
 
@@ -1423,15 +1597,118 @@
     var hasGate = Boolean(state.ownedRelics && state.ownedRelics.er_infinity_gate);
     var gateEnabled = hasGate && state.ownedRelics.er_infinity_gate.enabled !== false;
     var unlocked = state.ifUnlocked === true || hasGate;
-    var rate = gateEnabled ? 0.0000000000000000000000000000001 : 0;
+    var rate = gateEnabled ? applyZeroEndingMinimumBaseRate(0.0000000000000000000000000000001, state) : 0;
 
     return {
       unlocked: unlocked,
       displayUnlocked: unlocked && gateEnabled,
       drawEnabled: unlocked && gateEnabled,
       rate: rate,
-      probabilityText: unlocked && gateEnabled ? "0.0000000000000000000000000000001%" : "未観測"
+      probabilityText: unlocked && gateEnabled ? formatRateDisplay(rate) : "未観測"
     };
+  }
+
+  function calculateFiniteRelicGrowth(state) {
+    var owned = state && state.ownedRelics ? state.ownedRelics.infinity_finite_relic : null;
+    if (!owned || owned.enabled === false) {
+      return 0;
+    }
+    return data.FINITE_RELIC_INFINITY_RATE_GROWTH_BASE *
+      calculateLimitBreakGrowthMultiplier("IF", Math.max(0, (owned.count || 1) - 1)) *
+      calculateInfinityMultiplier(state);
+  }
+
+  function calculateRandomRateGrowthMultiplier(state) {
+    var multiplier = 1;
+    if (state && state.ownedRelics && state.ownedRelics.er_fulfillment && state.ownedRelics.er_fulfillment.enabled !== false) {
+      multiplier *= 2;
+    }
+    return multiplier;
+  }
+
+  function calculateShardRandomRateGrowth(state) {
+    var owned = state && state.ownedRelics ? state.ownedRelics.n_fragment : null;
+    var hasShard = owned && owned.enabled !== false;
+    var hasFulfillment = state && state.ownedRelics && state.ownedRelics.er_fulfillment && state.ownedRelics.er_fulfillment.enabled !== false;
+    if (!hasShard && !hasFulfillment) {
+      return 0;
+    }
+    var base = data.SHARD_RANDOM_RATE_GROWTH_BASE;
+    var shardMultiplier = hasShard ? calculateLimitBreakGrowthMultiplier("N", Math.max(0, (owned.count || 1) - 1)) : 1;
+    return base * shardMultiplier * calculateRandomRateGrowthMultiplier(state) * calculateInfinityMultiplier(state);
+  }
+
+  function calculateInfinityRateInfo(state) {
+    var ifInfo = calculateIfInfo(state);
+    var base = ifInfo.rate || 0;
+    var growth = Math.max(0, state && state.infinityRateGrowth ? state.infinityRateGrowth : 0);
+    return {
+      unlocked: state && (state.infinityBugUnlocked === true || state.ifUnlocked === true || state.observedIfProbability === true || (state.ownedRelics && state.ownedRelics.er_infinity_gate)),
+      base: base,
+      growth: growth,
+      final: base + growth,
+      baseText: ifInfo.displayUnlocked ? formatRateDisplay(base) : "未観測",
+      growthText: formatRateDisplay(growth),
+      finalText: ifInfo.displayUnlocked ? formatRateDisplay(base + growth) : "未観測"
+    };
+  }
+
+  function calculateInfinityBugDamageReduction(state) {
+    var multiplier = 1;
+    getOwnedRelicsByEnabled(state, true).forEach(function (view) {
+      view.effectValues.forEach(function (effectInfo) {
+        if (effectInfo.effectType === "special" && effectInfo.target === "infinity_bug_damage_reduction") {
+          multiplier *= (1 - effectInfo.currentValue);
+        }
+      });
+    });
+    return {
+      multiplier: roundDisplay(Math.max(0.05, multiplier)),
+      reduction: roundDisplay(1 - Math.max(0.05, multiplier))
+    };
+  }
+
+  function calculateInfinityBugDamageBonus(state) {
+    var bonus = 0;
+    getOwnedRelicsByEnabled(state, true).forEach(function (view) {
+      view.effectValues.forEach(function (effectInfo) {
+        if (effectInfo.effectType === "special" && effectInfo.target === "infinity_bug_damage_bonus") {
+          bonus += effectInfo.currentValue;
+        }
+      });
+    });
+    return roundDisplay(bonus);
+  }
+
+  function calculateInfinityBugDefenseOverride(state) {
+    var value = null;
+    getOwnedRelicsByEnabled(state, true).forEach(function (view) {
+      view.effectValues.forEach(function (effectInfo) {
+        if (effectInfo.effectType === "special" && effectInfo.target === "set_infinity_bug_defense") {
+          value = value === null ? effectInfo.currentValue : Math.min(value, effectInfo.currentValue);
+        }
+      });
+    });
+    return value;
+  }
+
+  function calculateCreationRelicStatGain(rank) {
+    var table = {
+      S: 10,
+      SR: 30,
+      SSR: 100,
+      SSSR: 300,
+      UR: 1000,
+      AR: 3000,
+      LR: 10000,
+      GR: 30000,
+      BR: 100000,
+      QR: 300000,
+      IR: 1000000,
+      ER: 3000000,
+      "∞": 10000000
+    };
+    return table[rank] || 0;
   }
 
   function getActiveEffects(state) {
@@ -1565,6 +1842,13 @@
       gachaCost: calculateGachaCost(state),
       extraBugRelicDropRate: calculateExtraBugRelicDropRate(state),
       ifInfo: calculateIfInfo(state),
+      infinityRateInfo: calculateInfinityRateInfo(state),
+      finiteRelicGrowthPerGacha: calculateFiniteRelicGrowth(state),
+      shardRandomRateGrowthPerGacha: calculateShardRandomRateGrowth(state),
+      shardGrowthMultiplier: calculateRandomRateGrowthMultiplier(state),
+      infinityBugDamageReduction: calculateInfinityBugDamageReduction(state),
+      infinityBugDamageBonus: calculateInfinityBugDamageBonus(state),
+      infinityBugDefenseOverride: calculateInfinityBugDefenseOverride(state),
       infinityMultiplier: calculateInfinityMultiplier(state),
       nextInfinityMultiplier: calculateNextInfinityMultiplier(state),
       rebirthMultiplier: roundDisplay(1 + getBaseRateRebirthBonus(state)),
@@ -1637,13 +1921,28 @@
     getRankTotalLimitBreak: getRankTotalLimitBreak,
     getHighestRankMaxLimitBreak: getHighestRankMaxLimitBreak,
     calculateGachaCost: calculateGachaCost,
-    calculateExtraBugRelicDropRate: calculateExtraBugRelicDropRate,
-    calculateInfinityMultiplier: calculateInfinityMultiplier,
-    calculateNextInfinityMultiplier: calculateNextInfinityMultiplier,
-    calculateBaseRateWithRebirth: calculateBaseRateWithRebirth,
-    calculateZeroRelicGrowthMultiplier: calculateZeroRelicGrowthMultiplier,
-    calculateNextRebirthBaseRateBonus: calculateNextRebirthBaseRateBonus,
-    getSlimeGrowthMultiplier: getSlimeGrowthMultiplier,
+      calculateExtraBugRelicDropRate: calculateExtraBugRelicDropRate,
+      calculateInfinityMultiplier: calculateInfinityMultiplier,
+      calculateNextInfinityMultiplier: calculateNextInfinityMultiplier,
+      calculateFiniteRelicGrowth: calculateFiniteRelicGrowth,
+      calculateShardRandomRateGrowth: calculateShardRandomRateGrowth,
+      calculateInfinityRateInfo: calculateInfinityRateInfo,
+      calculateInfinityBugDamageReduction: calculateInfinityBugDamageReduction,
+      calculateInfinityBugDamageBonus: calculateInfinityBugDamageBonus,
+      calculateInfinityBugDefenseOverride: calculateInfinityBugDefenseOverride,
+      calculateCreationRelicStatGain: calculateCreationRelicStatGain,
+      calculateBaseRateWithRebirth: calculateBaseRateWithRebirth,
+      calculateZeroRelicGrowthMultiplier: calculateZeroRelicGrowthMultiplier,
+      calculateNextRebirthBaseRateBonus: calculateNextRebirthBaseRateBonus,
+      calculateZeroEndingMinimumBaseRate: calculateZeroEndingMinimumBaseRate,
+      applyZeroEndingMinimumBaseRate: applyZeroEndingMinimumBaseRate,
+      calculateRandomRelicRateMultiplier: calculateRandomRelicRateMultiplier,
+      calculateVoidStatLoss: calculateVoidStatLoss,
+      reduceVoidStatLoss: reduceVoidStatLoss,
+      calculateVoidBossStats: calculateVoidBossStats,
+      hasVoidRelic: hasVoidRelic,
+      isVoidLikeBattle: isVoidLikeBattle,
+      getSlimeGrowthMultiplier: getSlimeGrowthMultiplier,
     getZeroRelicRateMultiplier: getZeroRelicRateMultiplier,
     applyInfinityMultiplierToEffect: applyInfinityMultiplierToEffect,
     calculateIfInfo: calculateIfInfo,

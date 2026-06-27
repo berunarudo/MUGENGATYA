@@ -210,8 +210,41 @@
       slimeRewardMultiplier: 20,
       gemRewardMultiplier: 1,
       slimeSpawnRate: 30
+    },
+    void: {
+      key: "void",
+      name: "虚無のダンジョン",
+      cost: 0,
+      durationMs: null,
+      isInfinite: true,
+      altarLogs: ["祭壇の下に、何もない穴が開いた。", "虚無のダンジョンに入場しました。", "ここには採掘も、宝石も、逃げ道もありません。"],
+      exitLogs: ["虚無のダンジョンから押し戻された。", "削られたステータスは戻らない。", "通常世界へ戻ります。"],
+      minePrefix: "虚無が蠢いた。",
+      slimePrefix: "虚無",
+      slimeRewardMultiplier: 1,
+      gemRewardMultiplier: 0,
+      slimeSpawnRate: 100
     }
   };
+
+  var VOID_DUNGEON_CONFIG = {
+    requiredRelicId: "er_void_relic",
+    maxBattleCount: 10
+  };
+
+  var VOID_SLIME_RANK_MULTIPLIER = {
+    N: 1,
+    S: 2,
+    SR: 5,
+    SSR: 10,
+    SSSR: 20,
+    UR: 50,
+    AR: 100,
+    LR: 200,
+    ER: 500
+  };
+
+  var VOID_SLIME_RANK_ORDER = ["N", "S", "SR", "SSR", "SSSR", "UR", "AR", "LR", "ER"];
 
   var GEM_REWARD_STONES = {
     N: 10,
@@ -291,6 +324,21 @@
   var RANK_ORDER = ["0", "IF", "ER", "IR", "QR", "BR", "GR", "LR", "AR", "UR", "SSSR", "SSR", "SR", "S", "N"];
   var TRACKED_RANKS = ["0", "N", "S", "SR", "SSR", "SSSR", "UR", "AR", "LR", "GR", "BR", "QR", "IR", "ER", "IF"];
   var PLAYER_RELIC_RANKS = ["0", "N", "S", "SR", "SSR", "SSSR", "UR", "AR", "LR", "GR", "BR", "QR", "IR", "ER", "IF"];
+  var INFINITY_RATE_RANKS = ["N", "S", "SR", "SSR", "SSSR", "UR", "AR", "LR", "GR", "BR", "QR", "IR", "ER", "IF", "∞"];
+  var FINITE_RELIC_INFINITY_RATE_GROWTH_BASE = 0.000000000000000000000000000001;
+  var SHARD_RANDOM_RATE_GROWTH_BASE = 0.000001;
+  var EVOLUTION_COST = 1000000;
+  var EVOLUTION_RECIPES = [
+    { id: "n_dust_to_er_transcendence", from: "n_dust", to: "er_transcendence", cost: EVOLUTION_COST },
+    { id: "s_wooden_sword_to_er_absolute_sword", from: "s_wooden_sword", to: "er_absolute_sword", cost: EVOLUTION_COST },
+    { id: "n_fragment_to_er_fulfillment", from: "n_fragment", to: "er_fulfillment", cost: EVOLUTION_COST },
+    { id: "sr_humanity_to_er_creation", from: "sr_humanity", to: "er_creation", cost: EVOLUTION_COST },
+    { id: "infinity_finite_relic_to_er_void_relic", from: "infinity_finite_relic", to: "er_void_relic", cost: EVOLUTION_COST }
+  ];
+  var EVOLUTION_RECIPE_INDEX = {};
+  EVOLUTION_RECIPES.forEach(function (recipe) {
+    EVOLUTION_RECIPE_INDEX[recipe.id] = recipe;
+  });
 
   var BUG_RANKS = [
     { rank: "S", name: "Sバグ", hp: 20, attack: 2, defense: 0, speed: 1, rewardMin: 10, rewardMax: 20, dropRanks: ["N", "S"] },
@@ -304,7 +352,8 @@
     { rank: "BR", name: "BRバグ", hp: 1500000, attack: 8000, defense: 3000, speed: 2000, rewardMin: 10000000, rewardMax: 30000000, dropRanks: ["LR", "BR"] },
     { rank: "QR", name: "QRバグ", hp: 10000000, attack: 30000, defense: 12000, speed: 5000, rewardMin: 100000000, rewardMax: 300000000, dropRanks: ["GR", "QR"] },
     { rank: "IR", name: "IRバグ", hp: 100000000, attack: 150000, defense: 60000, speed: 12000, rewardMin: 1000000000, rewardMax: 3000000000, dropRanks: ["BR", "IR"] },
-    { rank: "ER", name: "ERバグ", hp: 1000000000, attack: 800000, defense: 300000, speed: 30000, rewardMin: 10000000000, rewardMax: 30000000000, dropRanks: ["QR", "ER"] }
+    { rank: "ER", name: "ERバグ", hp: 1000000000, attack: 800000, defense: 300000, speed: 30000, rewardMin: 10000000000, rewardMax: 30000000000, dropRanks: ["QR", "ER"] },
+    { rank: "∞", name: "∞バグ", hp: 10000000000, attack: 8000000, defense: 3000000, speed: 50000, rewardMin: 100000000000, rewardMax: 300000000000, dropRanks: ["ER", "IF"] }
   ];
 
   var BUG_RANK_INDEX = {};
@@ -344,6 +393,44 @@
     { count: 10000, baseReward: 1000000 },
     { count: 100000, baseReward: 10000000 },
     { count: 1000000, baseReward: 100000000 }
+  ];
+
+  var VOID_BOSS = {
+    id: "void",
+    name: "虚無",
+    rank: "虚無",
+    hp: 1000000000000000,
+    attack: 1000000000000,
+    defense: 1000000000000,
+    speed: 1000000,
+    luck: 1000000,
+    specialStatLossEvery: 5,
+    healEvery: 3,
+    healRate: 0.3
+  };
+
+  var RANDOM_GOD = {
+    id: "random_god",
+    name: "乱数の神",
+    rank: "IF",
+    hp: 100000000000000000,
+    attack: 100000000000000,
+    defense: 100000000000000,
+    speed: 10000000,
+    luck: 10000000
+  };
+
+  var RANDOM_GOD_ACTIONS = [
+    { id: "blessing", name: "乱数の洗礼", weight: 35 },
+    { id: "breath", name: "乱数の息吹", weight: 8 },
+    { id: "rage", name: "乱数の怒り", weight: 10 },
+    { id: "smile", name: "乱数の微笑み", weight: 8 },
+    { id: "power", name: "乱数の力", weight: 10 },
+    { id: "weakness", name: "乱数の弱体", weight: 10 },
+    { id: "judgment", name: "乱数の裁き", weight: 1 },
+    { id: "reset", name: "リセット", weight: 0.5 },
+    { id: "needle", name: "乱数の針", weight: 7.5 },
+    { id: "random", name: "乱数", weight: 10 }
   ];
 
   function singleEffect(effectType, target, value, phase) {
@@ -388,7 +475,8 @@
     createRelic("n_critical_damage", "N", "N会心ダメの遺物", "", singleEffect("critical_damage", "criticalDamage", 1, 2)),
     createRelic("n_rate_up", "N", "N確率上昇の遺物", "", singleEffect("rate_add", "N", 0.1, 2)),
     createRelic("n_stone_save", "N", "N石節約の遺物", "10回ごとに1回ガチャ消費が無料", singleEffect("free_gacha_interval", "gacha", 10, 2)),
-    createRelic("n_fragment", "N", "N欠片の遺物", "", singleEffect("gacha_count_bonus", "miss_10", 1, 2)),
+    createRelic("n_fragment", "N", "N欠片の遺物", "ガチャを引くたびに、ランダムなランクの確率が少し上昇する。", singleEffect("special", "random_rate_growth", SHARD_RANDOM_RATE_GROWTH_BASE, 8)),
+    createRelic("n_dust", "N", "N塵の遺物", "∞バグから受けるダメージを軽減する。100凸で約30%軽減。", singleEffect("special", "infinity_bug_damage_reduction", 0.003, 8)),
     createRelic("n_record", "N", "N記録の遺物", "", singleEffect("gacha_count_bonus", "total_10", 1, 2)),
     createRelic("n_observe", "N", "N観測の遺物", "", singleEffect("special", "random_log_stone", 0.05, 2)),
     createRelic("n_crush", "N", "N粉砕の遺物", "", singleEffect("special", "dismantle_stone", 1, 5)),
@@ -412,6 +500,7 @@
     createRelic("s_evolution", "S", "S進化の遺物", "", singleEffect("rate_add", "SR", 0.1, 2)),
     createRelic("s_devolution", "S", "S退化の遺物", "", singleEffect("rate_subtract", "S", 0.1, 2)),
     createRelic("s_observe", "S", "S観測の遺物", "", singleEffect("gacha_count_bonus", "total_10", 3, 2)),
+    createRelic("s_wooden_sword", "S", "S木剣の遺物", "∞バグに対するダメージが上昇する。100凸で約30%上昇。", singleEffect("special", "infinity_bug_damage_bonus", 0.003, 8)),
     createRelic("s_hunter", "S", "S討伐者の遺物", "", singleEffect("bug_damage_flat", "bug", 3, 4)),
     createRelic("s_stable", "S", "S安定の遺物", "", singleEffect("bug_damage_reduction_flat", "bug", 3, 4)),
 
@@ -425,6 +514,7 @@
     createRelic("sr_resist", "SR", "SR耐性の遺物", "", singleEffect("bug_damage_reduction_multiplier", "bug", 0.05, 4)),
     createRelic("sr_evolution", "SR", "SR進化の遺物", "", singleEffect("rate_add", "SSR", 0.05, 2)),
     createRelic("sr_devolution", "SR", "SR退化の遺物", "", singleEffect("rate_subtract", "SR", 0.05, 2)),
+    createRelic("sr_humanity", "SR", "SR人類の遺物", "全ステータスが微々上昇する。凸で少し上がる。", singleEffect("all_stats_flat", "all_stats", 1, 8)),
 
     createRelic("ssr_giant", "SSR", "SSR巨人の遺物", "", singleEffect("stat_multiplier", "attack", 0.1, 2)),
     createRelic("ssr_phoenix", "SSR", "SSR不死鳥の遺物", "", singleEffect("stat_multiplier", "hp", 0.1, 2)),
@@ -558,8 +648,17 @@
       { effectType: "bug_reward_multiplier", target: "all", value: 11, phase: 7 }
     ], { obtainType: "gacha" }),
     createRelic("er_infinity_gate", "ER", "ER無限門の遺物", "", singleEffect("special", "if_unlock", 1, 7), { obtainType: "bug_drop_only", dropBugRank: "ER" }),
-    createRelic("if_infinity", "IF", "無限の遺物", "", singleEffect("special", "infinity_trigger", 1, 8), { obtainType: "if_gacha", autoEnableOnFirstGet: false, decomposable: false, uiRank: "∞" })
+    createRelic("er_transcendence", "ER", "ER超越の遺物", "∞バグから受けるダメージを80%減少する。", singleEffect("special", "infinity_bug_damage_reduction", 0.8, 8), { obtainType: "evolution_only", autoEnableOnFirstGet: true, limitBreakable: false, decomposable: false }),
+    createRelic("er_absolute_sword", "ER", "ER絶剣の遺物", "∞バグの防御力を1にする。", singleEffect("special", "set_infinity_bug_defense", 1, 8), { obtainType: "evolution_only", autoEnableOnFirstGet: true, limitBreakable: false, decomposable: false }),
+    createRelic("er_fulfillment", "ER", "ER成就の遺物", "ガチャを引くたびに、ランダムな確率上昇量が2倍になる。", singleEffect("special", "double_random_rate_growth", 2, 8), { obtainType: "evolution_only", autoEnableOnFirstGet: true, limitBreakable: false, decomposable: false }),
+    createRelic("er_creation", "ER", "ER創造の遺物", "バグ戦勝利後、ランクに応じて全ステータスが大きく上昇する。", singleEffect("special", "all_stats_growth_after_bug_win", 1, 8), { obtainType: "evolution_only", autoEnableOnFirstGet: true, limitBreakable: false, decomposable: false }),
+      createRelic("er_void_relic", "ER", "ER虚無の遺物", "虚無の攻撃を受けても、全ステータスの減少を1にする。", singleEffect("special", "void_stat_loss_reduce_to_one", 1, 8), { obtainType: "evolution_only", autoEnableOnFirstGet: true, limitBreakable: false, decomposable: false }),
+      createRelic("if_infinity", "IF", "無限の遺物", "", singleEffect("special", "infinity_trigger", 1, 8), { obtainType: "if_gacha", autoEnableOnFirstGet: false, decomposable: false, uiRank: "∞" }),
+      createRelic("infinity_finite_relic", "IF", "有限の遺物", "ガチャを引くたびに∞の確率が大きく上昇する。凸するほど上昇量が増える。", singleEffect("special", "infinity_rate_growth_per_gacha", FINITE_RELIC_INFINITY_RATE_GROWTH_BASE, 8), { obtainType: "infinity_bug_reward", autoEnableOnFirstGet: true, decomposable: false, permanent: true, uiRank: "∞" }),
+      createRelic("if_random_relic", "IF", "IF乱数の遺物", "ガチャの特定ランクの最終確率を大きく上昇させる。", singleEffect("special", "selective_rate_control", 10, 8), { obtainType: "random_god_reward", autoEnableOnFirstGet: true, limitBreakable: false, decomposable: false, permanent: true }),
+      createRelic("zero_ending_relic", "0", "0終焉の遺物", "全確率の基礎値を最低1%にする。凸すると最低基礎値が1%ずつ上昇する。", singleEffect("special", "minimum_base_rate", 1, 8), { obtainType: "void_reward", autoEnableOnFirstGet: true, decomposable: false, permanent: true, uiRank: "0" })
   ];
+
 
   var RELIC_INDEX = {};
   RELICS.forEach(function (relic) {
@@ -595,6 +694,7 @@
     n_rate_up: "N確率上昇の遺物",
     n_stone_save: "N石節約の遺物",
     n_fragment: "N欠片の遺物",
+    n_dust: "N塵の遺物",
     n_record: "N記録の遺物",
     n_observe: "N観測の遺物",
     n_crush: "N粉砕の遺物",
@@ -617,6 +717,7 @@
     s_evolution: "S進化の遺物",
     s_devolution: "S退化の遺物",
     s_observe: "S観測の遺物",
+    s_wooden_sword: "S木剣の遺物",
     s_hunter: "S討伐者の遺物",
     s_stable: "S安定の遺物",
     sr_power: "SR剛力の遺物",
@@ -629,6 +730,7 @@
     sr_resist: "SR耐性の遺物",
     sr_evolution: "SR進化の遺物",
     sr_devolution: "SR退化の遺物",
+    sr_humanity: "SR人類の遺物",
     ssr_giant: "SSR巨人の遺物",
     ssr_phoenix: "SSR不死鳥の遺物",
     ssr_fortress: "SSR城塞の遺物",
@@ -690,7 +792,15 @@
     er_stone_heaven: "ER石天の遺物",
     er_bug_apocalypse: "ERバグ終焉の遺物",
     er_infinity_gate: "ER無限門の遺物",
-    if_infinity: "無限の遺物"
+    er_transcendence: "ER超越の遺物",
+    er_absolute_sword: "ER絶剣の遺物",
+    er_fulfillment: "ER成就の遺物",
+    er_creation: "ER創造の遺物",
+    er_void_relic: "ER虚無の遺物",
+    if_infinity: "無限の遺物",
+    if_random_relic: "IF乱数の遺物",
+    infinity_finite_relic: "有限の遺物",
+    zero_ending_relic: "0終焉の遺物"
   };
 
   function isMojibakeText(text) {
@@ -871,9 +981,9 @@
     { key: "UR", label: "UR", baseChance: 0.001, displayRate: "0.001%", relicIds: ["ur_divine_beast", "ur_war_god", "ur_golden_rule", "ur_observer", "ur_evolution_factor"] },
     { key: "SSSR", label: "SSSR", baseChance: 0.01, displayRate: "0.01%", relicIds: ["sssr_dragon_king", "sssr_world_tree", "sssr_bastion", "sssr_raiden", "sssr_fate_star", "sssr_alchemist", "sssr_annihilator", "sssr_unbreakable_shell", "sssr_deification", "sssr_severance"] },
     { key: "SSR", label: "SSR", baseChance: 0.1, displayRate: "0.1%", relicIds: ["ssr_giant", "ssr_phoenix", "ssr_fortress", "ssr_thunder", "ssr_star_luck", "ssr_gold_vein", "ssr_hunt_god", "ssr_magic_shell", "ssr_transcend", "ssr_selection"] },
-    { key: "SR", label: "SR", baseChance: 1, displayRate: "1%", relicIds: ["sr_power", "sr_life", "sr_guard", "sr_gale", "sr_luck", "sr_stone_mine", "sr_subjugation", "sr_resist", "sr_evolution", "sr_devolution"] },
-    { key: "S", label: "S", baseChance: 3, displayRate: "3%", relicIds: ["s_power", "s_life", "s_guard", "s_gale", "s_luck", "s_stone_mine", "s_chain", "s_generate", "s_victory_reward", "s_dismantle_furnace", "s_evolution", "s_devolution", "s_observe", "s_hunter", "s_stable"] },
-    { key: "N", label: "N", baseChance: 15, displayRate: "15%", relicIds: ["n_attack", "n_life", "n_defense", "n_speed", "n_luck", "n_stone_pick", "n_pebble_bag", "n_retry", "n_many_hands", "n_hard_skin", "n_preemptive", "n_recovery", "n_first_aid", "n_idle", "n_accuracy", "n_evasion", "n_critical", "n_critical_damage", "n_rate_up", "n_stone_save", "n_fragment", "n_record", "n_observe", "n_crush", "n_storage", "n_call", "n_suppress", "n_reward", "n_evolution", "n_devolution"] }
+    { key: "SR", label: "SR", baseChance: 1, displayRate: "1%", relicIds: ["sr_power", "sr_life", "sr_guard", "sr_gale", "sr_luck", "sr_stone_mine", "sr_subjugation", "sr_resist", "sr_evolution", "sr_devolution", "sr_humanity"] },
+    { key: "S", label: "S", baseChance: 3, displayRate: "3%", relicIds: ["s_power", "s_life", "s_guard", "s_gale", "s_luck", "s_stone_mine", "s_chain", "s_generate", "s_victory_reward", "s_dismantle_furnace", "s_evolution", "s_devolution", "s_observe", "s_wooden_sword", "s_hunter", "s_stable"] },
+    { key: "N", label: "N", baseChance: 15, displayRate: "15%", relicIds: ["n_attack", "n_life", "n_defense", "n_speed", "n_luck", "n_stone_pick", "n_pebble_bag", "n_retry", "n_many_hands", "n_hard_skin", "n_preemptive", "n_recovery", "n_first_aid", "n_idle", "n_accuracy", "n_evasion", "n_critical", "n_critical_damage", "n_rate_up", "n_stone_save", "n_fragment", "n_dust", "n_record", "n_observe", "n_crush", "n_storage", "n_call", "n_suppress", "n_reward", "n_evolution", "n_devolution"] }
   ];
 
   function createRankTotalObject() {
@@ -921,7 +1031,13 @@
       unlockedSlimeRanks: ["N"],
       highestDefeatedSlimeRank: null,
       dungeonRateBonus: 1,
-      isInfiniteDungeon: false
+      isInfiniteDungeon: false,
+      isVoidDungeon: false,
+      currentBattleIndex: 0,
+      maxBattleCount: 0,
+      defeatedCount: 0,
+      isCompleted: false,
+      endedAt: null
     };
   }
 
@@ -950,7 +1066,10 @@
       totalZeroSlimeDefeats: 0,
       enteredNormalDungeon: 0,
       enteredGoldenDungeon: 0,
-      enteredDimensionalDungeon: 0
+      enteredDimensionalDungeon: 0,
+      enteredVoidDungeon: 0,
+      completedVoidDungeon: 0,
+      failedVoidDungeon: 0
     };
   }
 
@@ -977,8 +1096,94 @@
     return {
       infinity_slime_relic: {
         owned: false,
-        enabled: false
+        enabled: false,
+        count: 1,
+        limitBreak: 0
+      },
+      zero_ending_relic: {
+        owned: false,
+        enabled: false,
+        count: 0,
+        limitBreak: 0
+      },
+      if_random_relic: {
+        owned: false,
+        enabled: false,
+        count: 1,
+        limitBreak: 0
       }
+    };
+  }
+
+  function createVoidState() {
+    return {
+      unlocked: false,
+      isInVoidBattle: false,
+      encounters: 0,
+      defeats: 0,
+      firstDefeatedAt: null
+    };
+  }
+
+  function createVoidBattleState() {
+    return {
+      turnCount: 0,
+      voidActionCount: 0,
+      playerActionCount: 0,
+      randomGodActionCount: 0,
+      initialPlayerMaxHp: 0,
+      initialEnemyMaxHp: 0,
+      initialEnemyAttack: 0,
+      initialEnemyDefense: 0,
+      initialEnemySpeed: 0
+    };
+  }
+
+  function createVoidDungeonState() {
+    return {
+      isInVoidDungeon: false,
+      currentBattleIndex: 0,
+      maxBattleCount: VOID_DUNGEON_CONFIG.maxBattleCount,
+      defeatedCount: 0,
+      isCompleted: false,
+      startedAt: null,
+      endedAt: null
+    };
+  }
+
+  function createVoidSlimeRecords() {
+    return {
+      encounters: 0,
+      defeats: 0,
+      defeatByRank: {
+        N: 0,
+        S: 0,
+        SR: 0,
+        SSR: 0,
+        SSSR: 0,
+        UR: 0,
+        AR: 0,
+        LR: 0,
+        ER: 0
+      }
+    };
+  }
+
+  function createRandomGodRecords() {
+    return {
+      encounters: 0,
+      defeats: 0,
+      sawJudgment: false,
+      sawReset: false,
+      firstDefeatedAt: null
+    };
+  }
+
+  function createRandomRelicState() {
+    return {
+      owned: false,
+      enabled: false,
+      selectedRank: "ER"
     };
   }
 
@@ -1066,6 +1271,10 @@
       createAchievement({ id: "bug_total_10", categoryKey: "bug", name: "バグハンター", description: "バグを10体倒す", targetType: "totalBugDefeats", targetValue: 10, rewardStone: 1000 }),
       createAchievement({ id: "bug_rank_S", categoryKey: "bug", name: "Sバグを倒した", description: "Sバグを撃破する", targetType: "bugRankDefeat", targetRank: "S", targetValue: 1, rewardStone: 1000 }),
       createAchievement({ id: "bug_rank_ER", categoryKey: "bug", name: "ERバグを倒した", description: "ERバグを撃破する", targetType: "bugRankDefeat", targetRank: "ER", targetValue: 1, rewardStone: 20000000000 }),
+      createAchievement({ id: "bug_rank_infinity", categoryKey: "bug", name: "∞バグを倒した", description: "∞バグを撃破する", targetType: "infinityBugDefeats", targetValue: 1, rewardStone: 500000000000, implemented: true }),
+      createAchievement({ id: "bug_infinity_encounter", categoryKey: "bug", name: "終端を超えた遭遇", description: "∞バグに遭遇する", targetType: "infinityBugEncounters", targetValue: 1, rewardStone: 100000000000, implemented: true }),
+      createAchievement({ id: "bug_infinity_defeat_10", categoryKey: "bug", name: "無限を壊す者", description: "∞バグを10体撃破する", targetType: "infinityBugDefeats", targetValue: 10, rewardStone: 5000000000000, implemented: true }),
+      createAchievement({ id: "bug_infinity_defeat_100", categoryKey: "bug", name: "無限を磨耗させる者", description: "∞バグを100体撃破する", targetType: "infinityBugDefeats", targetValue: 100, rewardStone: 50000000000000, implemented: true }),
     ]).concat(generateBugDefeatAchievements()).concat([
       createAchievement({ id: "dungeon_mine_1", categoryKey: "mining", name: "初めての採掘", description: "採掘を1回行う", targetType: "totalMiningCount", targetValue: 1, rewardStone: 100, implemented: true }),
       createAchievement({ id: "dungeon_mine_100", categoryKey: "mining", name: "鉱夫", description: "採掘を100回行う", targetType: "totalMiningCount", targetValue: 100, rewardStone: 10000, implemented: true }),
@@ -1102,6 +1311,28 @@
       createAchievement({ id: "milestone_qr", categoryKey: "gacha", name: "ありえない引き", description: "QR以上を獲得", targetType: "highestRelicRankAtLeast", targetRank: "QR", rewardStone: 50000000, implemented: true }),
       createAchievement({ id: "milestone_ir", categoryKey: "gacha", name: "確率の深淵", description: "IR以上を獲得", targetType: "highestRelicRankAtLeast", targetRank: "IR", rewardStone: 500000000, implemented: true }),
       createAchievement({ id: "milestone_er", categoryKey: "gacha", name: "終端の観測", description: "ER以上を獲得", targetType: "highestRelicRankAtLeast", targetRank: "ER", rewardStone: 5000000000, implemented: true }),
+      createAchievement({ id: "milestone_finite_relic", categoryKey: "infinity", name: "有限の回収", description: "有限の遺物を獲得する", targetType: "hasRelic", targetRelicId: "infinity_finite_relic", targetValue: 1, rewardStone: 1000000000000, implemented: true }),
+      createAchievement({ id: "milestone_evolution_1", categoryKey: "special", name: "最初の進化", description: "祭壇で進化を1回行う", targetType: "evolutionCount", targetValue: 1, rewardStone: 1000000, implemented: true }),
+      createAchievement({ id: "void_seen", categoryKey: "special", name: "虚無を見た者", description: "虚無に初遭遇する", targetType: "voidEncounters", targetValue: 1, rewardStone: 1000000, implemented: true }),
+      createAchievement({ id: "void_loss", categoryKey: "special", name: "虚無に削られた者", description: "虚無の特殊攻撃を受ける", targetType: "specialFlag", targetFlag: "voidStatLossTaken", rewardStone: 10000000, implemented: true }),
+      createAchievement({ id: "void_defeat", categoryKey: "special", name: "虚無を超えた者", description: "虚無を撃破する", targetType: "voidDefeats", targetValue: 1, rewardStone: 10000000000, implemented: true }),
+      createAchievement({ id: "zero_ending_observer", categoryKey: "special", name: "終焉の観測者", description: "0終焉の遺物を獲得する", targetType: "hasPermanentRelic", targetRelicId: "zero_ending_relic", targetValue: 1, rewardStone: 100000000, implemented: true }),
+      createAchievement({ id: "zero_ending_10", categoryKey: "special", name: "0の終わり", description: "0終焉の遺物を10凸にする", targetType: "permanentRelicLimitBreak", targetRelicId: "zero_ending_relic", targetValue: 10, rewardStone: 1000000000, implemented: true }),
+      createAchievement({ id: "void_dungeon_enter", categoryKey: "dungeon", name: "虚無のダンジョン入場", description: "虚無のダンジョンに入場する", targetType: "enteredVoidDungeon", targetValue: 1, rewardStone: 10000000, implemented: true }),
+      createAchievement({ id: "void_dungeon_complete", categoryKey: "dungeon", name: "虚無踏破", description: "虚無のダンジョンを踏破する", targetType: "completedVoidDungeon", targetValue: 1, rewardStone: 1000000000, implemented: true }),
+      createAchievement({ id: "void_dungeon_failed", categoryKey: "dungeon", name: "虚無のダンジョンで敗北", description: "虚無のダンジョンで敗北する", targetType: "failedVoidDungeon", targetValue: 1, rewardStone: 100000000, implemented: true }),
+      createAchievement({ id: "void_slime_seen", categoryKey: "dungeon", name: "虚無に染まる粘体", description: "虚無スライムに初遭遇する", targetType: "voidSlimeEncounters", targetValue: 1, rewardStone: 10000000, implemented: true }),
+      createAchievement({ id: "void_slime_rank_n", categoryKey: "dungeon", name: "N虚無撃破", description: "N虚無スライムを撃破する", targetType: "voidSlimeRankDefeat", targetRank: "N", targetValue: 1, rewardStone: 10000000, implemented: true }),
+      createAchievement({ id: "void_slime_rank_s", categoryKey: "dungeon", name: "S虚無撃破", description: "S虚無スライムを撃破する", targetType: "voidSlimeRankDefeat", targetRank: "S", targetValue: 1, rewardStone: 30000000, implemented: true }),
+      createAchievement({ id: "void_slime_rank_sr", categoryKey: "dungeon", name: "SR虚無撃破", description: "SR虚無スライムを撃破する", targetType: "voidSlimeRankDefeat", targetRank: "SR", targetValue: 1, rewardStone: 100000000, implemented: true }),
+      createAchievement({ id: "void_slime_rank_ssr", categoryKey: "dungeon", name: "SSR虚無撃破", description: "SSR虚無スライムを撃破する", targetType: "voidSlimeRankDefeat", targetRank: "SSR", targetValue: 1, rewardStone: 300000000, implemented: true }),
+      createAchievement({ id: "void_slime_rank_er", categoryKey: "dungeon", name: "ER虚無撃破", description: "ER虚無スライムを撃破する", targetType: "voidSlimeRankDefeat", targetRank: "ER", targetValue: 1, rewardStone: 3000000000, implemented: true }),
+      createAchievement({ id: "void_slime_9_chain", categoryKey: "dungeon", name: "九つの虚無を越えて", description: "虚無スライムを9連戦突破する", targetType: "voidSlimeTotalDefeats", targetValue: 9, rewardStone: 5000000000, implemented: true }),
+      createAchievement({ id: "random_god_seen", categoryKey: "special", name: "乱数を司るもの", description: "乱数の神に初遭遇する", targetType: "randomGodEncounters", targetValue: 1, rewardStone: 1000000000, implemented: true }),
+      createAchievement({ id: "random_god_judgment", categoryKey: "special", name: "1%の死", description: "乱数の裁きを受ける", targetType: "specialFlag", targetFlag: "randomGodJudgmentSeen", rewardStone: 100000000, implemented: true }),
+      createAchievement({ id: "random_god_reset", categoryKey: "special", name: "巻き戻る戦闘", description: "リセットを目撃する", targetType: "specialFlag", targetFlag: "randomGodResetSeen", rewardStone: 100000000, implemented: true }),
+      createAchievement({ id: "random_god_defeat", categoryKey: "special", name: "乱数を超えた者", description: "乱数の神を撃破する", targetType: "randomGodDefeats", targetValue: 1, rewardStone: 10000000000, implemented: true }),
+      createAchievement({ id: "if_random_relic_get", categoryKey: "relic", name: "乱数操作", description: "IF乱数の遺物を獲得する", targetType: "hasPermanentRelic", targetRelicId: "if_random_relic", targetValue: 1, rewardStone: 1000000000, implemented: true }),
       createAchievement({ id: "milestone_infinity", categoryKey: "infinity", name: "無限の観測", description: "∞遺物を獲得", targetType: "future", rewardStone: 0, implemented: false, futurePhase: 8 }),
       createAchievement({ id: "milestone_infinity_button", categoryKey: "infinity", name: "無限を押した者", description: "初めて「無限」を押す", targetType: "future", rewardStone: 0, implemented: false, futurePhase: 8 }),
       createAchievement({ id: "milestone_infinity_lb1", categoryKey: "infinity", name: "二周目の世界", description: "∞凸1達成", targetType: "future", rewardStone: 1000000, implemented: false, futurePhase: 8 }),
@@ -1156,7 +1387,12 @@
       specialFlags: {
         defeatedSsrBugWithoutUr: false,
         threeBugSpawnsWithinTen: false,
-        subPoint001RelicFound: false
+        subPoint001RelicFound: false,
+        voidStatLossTaken: false,
+        randomGodJudgmentSeen: false,
+        randomGodResetSeen: false,
+        voidDungeonFailed: false,
+        voidDungeonEntered: false
       },
       altarState: {
         activeEvent: null,
@@ -1170,6 +1406,13 @@
       zeroRelicState: createZeroRelicState(),
       permanentRelics: createPermanentRelics(),
       zeroSlimeRecords: createZeroSlimeRecords(),
+      voidState: createVoidState(),
+      voidStatPenalty: createDungeonStatBonus(),
+      voidBattleState: createVoidBattleState(),
+      voidDungeonState: createVoidDungeonState(),
+      voidSlimeRecords: createVoidSlimeRecords(),
+      randomGodRecords: createRandomGodRecords(),
+      randomRelicState: createRandomRelicState(),
       autoButtonState: {
         lastPlayerActionAt: now,
         isRunning: false,
@@ -1183,6 +1426,7 @@
       },
       recentBugSpawnGachaCounts: [],
       ifUnlocked: false,
+      infinityBugUnlocked: false,
       bugLimitedRelicObtained: {
         QR: false,
         IR: false,
@@ -1195,6 +1439,21 @@
       },
       highestObservedRank: null,
       observedIfProbability: false,
+      infinityRateGrowth: 0,
+      randomRateGrowthByShard: (function () {
+        var result = {};
+        INFINITY_RATE_RANKS.forEach(function (rank) {
+          result[rank] = 0;
+        });
+        return result;
+      })(),
+      creationRelicStatBonus: createDungeonStatBonus(),
+      infinityBugRecords: {
+        encounters: 0,
+        defeats: 0,
+        firstDefeatedAt: null
+      },
+      evolutionCount: 0,
       infinityCount: 0,
       infinityExecuted: false,
       specialLogUnlocked: false,
@@ -1240,6 +1499,12 @@
     N_SLIME_STATS: N_SLIME_STATS,
     INFINITY_SLIME_BASE_STATS: INFINITY_SLIME_BASE_STATS,
     ZERO_SLIME_BASE_STATS: ZERO_SLIME_BASE_STATS,
+    VOID_BOSS: VOID_BOSS,
+    VOID_DUNGEON_CONFIG: VOID_DUNGEON_CONFIG,
+    VOID_SLIME_RANK_MULTIPLIER: VOID_SLIME_RANK_MULTIPLIER,
+    VOID_SLIME_RANK_ORDER: VOID_SLIME_RANK_ORDER,
+    RANDOM_GOD: RANDOM_GOD,
+    RANDOM_GOD_ACTIONS: RANDOM_GOD_ACTIONS,
     ACHIEVEMENT_CATEGORIES: ACHIEVEMENT_CATEGORIES,
     ACHIEVEMENTS: ACHIEVEMENTS,
     ACHIEVEMENT_INDEX: ACHIEVEMENT_INDEX,
@@ -1252,6 +1517,12 @@
     BUG_RANKS: BUG_RANKS,
     BUG_RANKS_LIST: BUG_RANKS_LIST,
     BUG_RANK_INDEX: BUG_RANK_INDEX,
+    INFINITY_RATE_RANKS: INFINITY_RATE_RANKS,
+    FINITE_RELIC_INFINITY_RATE_GROWTH_BASE: FINITE_RELIC_INFINITY_RATE_GROWTH_BASE,
+    SHARD_RANDOM_RATE_GROWTH_BASE: SHARD_RANDOM_RATE_GROWTH_BASE,
+    EVOLUTION_COST: EVOLUTION_COST,
+    EVOLUTION_RECIPES: EVOLUTION_RECIPES,
+    EVOLUTION_RECIPE_INDEX: EVOLUTION_RECIPE_INDEX,
     RELICS: RELICS,
     RELIC_INDEX: RELIC_INDEX,
     RELIC_NAME_FALLBACKS: RELIC_NAME_FALLBACKS,
@@ -1267,9 +1538,14 @@
     createZeroRelicState: createZeroRelicState,
     createPermanentRelics: createPermanentRelics,
     createZeroSlimeRecords: createZeroSlimeRecords,
+    createVoidState: createVoidState,
+    createVoidBattleState: createVoidBattleState,
+    createVoidDungeonState: createVoidDungeonState,
+    createVoidSlimeRecords: createVoidSlimeRecords,
+    createRandomGodRecords: createRandomGodRecords,
+    createRandomRelicState: createRandomRelicState,
     getRankOrderIndex: getRankOrderIndex,
     isRankAtLeast: isRankAtLeast,
     createInitialState: createInitialState
   };
 })();
-

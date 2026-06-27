@@ -3,6 +3,7 @@
   var effects = window.InfinityGachaEffects;
   var achievements = window.InfinityGachaAchievements;
   var decompose = window.InfinityGachaDecompose;
+  var altar = window.InfinityGachaAltar;
   var dungeon = window.InfinityGachaDungeon;
   var help = window.InfinityGachaHelp;
 
@@ -201,7 +202,7 @@
     return filtered;
   }
 
-  function renderRelicList(summary, relicUiState) {
+  function renderRelicList(summary, relicUiState, state) {
     var filtered = filterRelics(summary.relicViews, relicUiState.activeTab, relicUiState.sortMode);
     if (!filtered.length) {
       return '<div class="empty-text">表示できる遺物はありません。</div>';
@@ -232,17 +233,18 @@
         '<div class="detail-row"><span class="detail-label">効果</span><span class="detail-value">' + escapeHtml(description) + '</span></div>' +
         '<div class="detail-row"><span class="detail-label">基礎効果</span><span class="detail-value">' + escapeHtml(baseEffects || 'なし') + '</span></div>' +
         '<div class="detail-row"><span class="detail-label">凸成長倍率</span><span class="detail-value">' + escapeHtml(formatMultiplier(view.limitBreakGrowthMultiplier || 1)) + '</span></div>' +
-        '<div class="detail-row"><span class="detail-label">入手区分</span><span class="detail-value">' + escapeHtml(view.obtainType === 'zero_slime_reward' ? '0スライム報酬' : view.obtainType === 'bug_drop_only' ? 'バグ限定' : view.obtainType === 'if_gacha' ? 'IF抽選' : view.obtainType === 'altar_only' ? '祭壇限定' : '通常ガチャ') + '</span></div>' +
+        '<div class="detail-row"><span class="detail-label">入手区分</span><span class="detail-value">' + escapeHtml(view.obtainType === 'zero_slime_reward' ? '0スライム報酬' : view.obtainType === 'bug_drop_only' ? 'バグ限定' : view.obtainType === 'if_gacha' ? 'IF抽選' : view.obtainType === 'altar_only' ? '祭壇限定' : view.obtainType === 'evolution_only' ? '進化限定' : view.obtainType === 'infinity_bug_reward' ? '∞バグ報酬' : view.obtainType === 'void_reward' ? '虚無報酬' : view.obtainType === 'random_god_reward' ? '乱数の神報酬' : '通常ガチャ') + '</span></div>' +
         (view.dropBugRank ? '<div class="detail-row"><span class="detail-label">対応バグ</span><span class="detail-value">' + escapeHtml(view.dropBugRank + 'バグ') + '</span></div>' : '') +
         '<div class="detail-row"><span class="detail-label">現在効果</span><span class="detail-value">' + escapeHtml(currentEffects || 'なし') + '</span></div>' +
         '<div class="detail-row"><span class="detail-label">実装状態</span><span class="detail-value">' + escapeHtml(view.implementationStatus.label) + '</span></div>' +
+        (view.id === 'if_random_relic' && view.owned ? '<div class="detail-row"><span class="detail-label">操作対象</span><span class="detail-value"><select data-random-relic-rank>' + data.INFINITY_RATE_RANKS.map(function (rank) { return '<option value="' + escapeHtml(rank) + '"' + (((state.randomRelicState && state.randomRelicState.selectedRank) || 'ER') === rank ? ' selected' : '') + '>' + escapeHtml(rank) + '</option>'; }).join('') + '</select></span></div>' : '') +
         (view.id === 'if_infinity' ? '<div class="detail-row"><span class="detail-label">警告</span><span class="detail-value">この遺物をONにすると、ガチャボタンが「無限」に変化します。「無限」を押すと、通常データは初期化されます。</span></div>' : '') +
       '</article>';
     }).join('');
   }
 
-  function renderRelicView(summary, relicUiState) {
-    return '<div class="toolbar">' + renderRelicTabs(relicUiState.activeTab) + renderRelicSort(relicUiState.sortMode) + '</div>' + renderRelicList(summary, relicUiState);
+  function renderRelicView(summary, relicUiState, state) {
+    return '<div class="toolbar">' + renderRelicTabs(relicUiState.activeTab) + renderRelicSort(relicUiState.sortMode) + '</div>' + renderRelicList(summary, relicUiState, state);
   }
 
   function battleBonusSummary(battleStats) {
@@ -265,15 +267,16 @@
     return parts.length ? parts.join(' / ') : 'なし';
   }
 
-  function renderRateTable(summary) {
+  function renderRateTable(summary, state) {
     var rows = summary.rateTable.rows.map(function (row) {
-      return '<tr><td>' + escapeHtml(row.rank) + '</td><td>' + escapeHtml(row.baseDisplay || formatRateValue(row.base)) + '</td><td>' + escapeHtml(row.rebirthBaseDisplay || formatRateValue(row.rebirthBase || row.base)) + '</td><td>' + escapeHtml(formatMultiplier(summary.rateTable.rebirthMultiplier || 1)) + '</td><td>' + escapeHtml(formatMultiplier(summary.rateTable.zeroRelicRateMultiplier || 1)) + '</td><td>' + escapeHtml(formatRateValue(row.add)) + '</td><td>' + escapeHtml(formatRateValue(row.subtract)) + '</td><td>' + escapeHtml(formatMultiplier(row.multiplier || 1)) + '</td><td>' + escapeHtml(formatMultiplier(row.bugDefeatMultiplier || 1)) + '</td><td>' + escapeHtml(formatRateValue(row.final)) + '</td></tr>';
+      return '<tr><td>' + escapeHtml(row.rank) + '</td><td>' + escapeHtml(row.baseDisplay || formatRateValue(row.base)) + '</td><td>' + escapeHtml(row.rebirthBaseDisplay || formatRateValue(row.rebirthBase || row.base)) + '</td><td>' + escapeHtml(formatRateValue(summary.rateTable.zeroEndingMinimumBaseRate || 0)) + '</td><td>' + escapeHtml(row.minimumAdjustedBaseDisplay || formatRateValue(row.minimumAdjustedBase || row.zeroRelicAdjustedBase || row.base)) + '</td><td>' + escapeHtml(formatMultiplier(summary.rateTable.zeroRelicRateMultiplier || 1)) + '</td><td>' + escapeHtml(formatRateValue(row.add)) + '</td><td>' + escapeHtml(formatRateValue(row.subtract)) + '</td><td>' + escapeHtml(formatRateValue(row.shardGrowth || 0)) + '</td><td>' + escapeHtml(formatMultiplier(row.multiplier || 1)) + '</td><td>' + escapeHtml(formatMultiplier(row.bugDefeatMultiplier || 1)) + '</td><td>' + escapeHtml(formatMultiplier(row.randomRelicMultiplier || 1)) + '</td><td>' + escapeHtml(formatRateValue((row.final || 0) + (row.shardGrowth || 0))) + '</td></tr>';
     }).join('');
 
-    rows += '<tr><td>はずれ</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>' + escapeHtml(formatRateValue(summary.rateTable.missRate)) + '</td></tr>';
-    rows += '<tr><td>IF</td><td>' + escapeHtml(summary.ifInfo && summary.ifInfo.drawEnabled ? "0.0000000000000000000000000000001%" : "未観測") + '</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>' + escapeHtml(summary.ifInfo ? summary.ifInfo.probabilityText : "未観測") + '</td></tr>';
+    rows += '<tr><td>はずれ</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>' + escapeHtml(formatRateValue(summary.rateTable.missRate)) + '</td></tr>';
+    rows += '<tr><td>IF</td><td>' + escapeHtml(summary.ifInfo && summary.ifInfo.drawEnabled ? summary.ifInfo.probabilityText : "未観測") + '</td><td>-</td><td>' + escapeHtml(formatRateValue(summary.rateTable.zeroEndingMinimumBaseRate || 0)) + '</td><td>' + escapeHtml(summary.ifInfo ? summary.ifInfo.probabilityText : "未観測") + '</td><td>-</td><td>-</td><td>-</td><td>' + escapeHtml(formatRateValue((summary.rateTable.shardGrowthByRank || {}).IF || 0)) + '</td><td>-</td><td>-</td><td>' + escapeHtml(formatMultiplier(((state.randomRelicState && state.randomRelicState.selectedRank) === 'IF' && state.randomRelicState.enabled) ? 10 : 1)) + '</td><td>' + escapeHtml(summary.ifInfo ? summary.ifInfo.probabilityText : "未観測") + '</td></tr>';
+    rows += '<tr><td>∞</td><td>' + escapeHtml(summary.infinityRateInfo.baseText) + '</td><td>-</td><td>' + escapeHtml(formatRateValue(summary.rateTable.zeroEndingMinimumBaseRate || 0)) + '</td><td>' + escapeHtml(summary.infinityRateInfo.baseText) + '</td><td>-</td><td>' + escapeHtml(summary.infinityRateInfo.growthText) + '</td><td>-</td><td>' + escapeHtml(formatRateValue((summary.rateTable.shardGrowthByRank || {})["∞"] || 0)) + '</td><td>' + escapeHtml(formatMultiplier(summary.shardGrowthMultiplier || 1)) + '</td><td>-</td><td>' + escapeHtml(formatMultiplier(((state.randomRelicState && state.randomRelicState.selectedRank) === '∞' && state.randomRelicState.enabled) ? 10 : 1)) + '</td><td>' + escapeHtml(summary.infinityRateInfo.finalText) + '</td></tr>';
 
-    return '<div class="box-block"><h3>現在のガチャ確率補正</h3><table class="data-table"><thead><tr><th>ランク</th><th>初期基礎確率</th><th>転生後基礎確率</th><th>転生倍率</th><th>0の遺物補正</th><th>加算</th><th>減少</th><th>倍率補正</th><th>撃破倍率補正</th><th>最終確率</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+    return '<div class="box-block"><h3>現在のガチャ確率補正</h3><table class="data-table"><thead><tr><th>ランク</th><th>初期基礎確率</th><th>転生後基礎確率</th><th>0終焉最低基礎値</th><th>補正後基礎確率</th><th>0の遺物補正</th><th>加算</th><th>減少</th><th>欠片成長</th><th>倍率補正</th><th>撃破倍率補正</th><th>乱数操作倍率</th><th>最終確率</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
   }
 
   function renderRateSummary(summary) {
@@ -370,6 +373,38 @@
       detailCell('スライム成長倍率', formatMultiplier(summary.slimeGrowthMultiplier || 1)) +
       detailCell('IF解放状態', summary.ifInfo && summary.ifInfo.displayUnlocked ? '観測中' : '未観測') +
       detailCell('IF確率', summary.ifInfo ? summary.ifInfo.probabilityText : '未観測') +
+      detailCell('∞バグ解放', state.infinityBugUnlocked ? '解放済み' : '未解放') +
+      detailCell('∞基礎確率', summary.infinityRateInfo.baseText) +
+      detailCell('有限による∞成長', summary.infinityRateInfo.growthText) +
+      detailCell('最終∞確率', summary.infinityRateInfo.finalText) +
+      detailCell('∞バグ被ダメ軽減', formatPercent((summary.infinityBugDamageReduction.reduction || 0) * 100)) +
+      detailCell('∞バグ与ダメ上昇', formatPercent((summary.infinityBugDamageBonus || 0) * 100)) +
+      detailCell('∞バグ防御無効', summary.infinityBugDefenseOverride !== null ? ('防御' + summary.infinityBugDefenseOverride) : 'なし') +
+      detailCell('有限の遺物', state.ownedRelics && state.ownedRelics.infinity_finite_relic ? '所持' : '未所持') +
+      detailCell('欠片ランダム成長', formatRateValue(summary.shardRandomRateGrowthPerGacha || 0)) +
+      detailCell('ER成就補正', formatMultiplier(summary.shardGrowthMultiplier || 1)) +
+      detailCell('ER創造累計HP', (state.creationRelicStatBonus && state.creationRelicStatBonus.hp) || 0) +
+      detailCell('∞バグ遭遇数', (state.infinityBugRecords && state.infinityBugRecords.encounters) || 0) +
+      detailCell('∞バグ撃破数', (state.infinityBugRecords && state.infinityBugRecords.defeats) || 0) +
+      detailCell('進化回数', state.evolutionCount || 0) +
+      detailCell('0終焉最低基礎値', formatRateValue(summary.rateTable.zeroEndingMinimumBaseRate || 0)) +
+      detailCell('IF乱数の遺物', state.permanentRelics && state.permanentRelics.if_random_relic && state.permanentRelics.if_random_relic.owned ? '所持' : '未所持') +
+      detailCell('乱数操作状態', state.randomRelicState && state.randomRelicState.owned ? (state.randomRelicState.enabled ? 'ON' : 'OFF') : '未所持') +
+      detailCell('乱数操作対象', state.randomRelicState && state.randomRelicState.owned ? state.randomRelicState.selectedRank : 'なし') +
+      detailCell('乱数操作倍率', state.randomRelicState && state.randomRelicState.enabled ? '10倍' : '1倍') +
+      detailCell('虚無遭遇数', (state.voidState && state.voidState.encounters) || 0) +
+      detailCell('虚無撃破数', (state.voidState && state.voidState.defeats) || 0) +
+      detailCell('虚無ダンジョン入場', (state.dungeonRecords && state.dungeonRecords.enteredVoidDungeon) || 0) +
+      detailCell('虚無ダンジョン踏破', (state.dungeonRecords && state.dungeonRecords.completedVoidDungeon) || 0) +
+      detailCell('虚無ダンジョン敗北', (state.dungeonRecords && state.dungeonRecords.failedVoidDungeon) || 0) +
+      detailCell('虚無スライム遭遇', (state.voidSlimeRecords && state.voidSlimeRecords.encounters) || 0) +
+      detailCell('虚無スライム撃破', (state.voidSlimeRecords && state.voidSlimeRecords.defeats) || 0) +
+      detailCell('乱数の神遭遇', (state.randomGodRecords && state.randomGodRecords.encounters) || 0) +
+      detailCell('乱数の神撃破', (state.randomGodRecords && state.randomGodRecords.defeats) || 0) +
+      detailCell('虚無HP減少累計', (state.voidStatPenalty && state.voidStatPenalty.hp) || 0) +
+      detailCell('虚無攻撃減少累計', (state.voidStatPenalty && state.voidStatPenalty.attack) || 0) +
+      detailCell('虚無防御減少累計', (state.voidStatPenalty && state.voidStatPenalty.defense) || 0) +
+      detailCell('虚無速度減少累計', (state.voidStatPenalty && state.voidStatPenalty.speed) || 0) +
       detailCell('無限の遺物', state.ownedRelics && state.ownedRelics.if_infinity ? '所持' : '未所持') +
       detailCell('無限の遺物状態', state.ownedRelics && state.ownedRelics.if_infinity ? (summary.infinityRelicEnabled ? 'ON' : 'OFF') : '未所持') +
       detailCell('万里の遺物', summary.longPressUnlocked ? '所持' : '未所持') +
@@ -410,7 +445,7 @@
     renderEffectTable(summary.activeEffects, '発動中の遺物効果', '現在発動中の効果はありません。') +
     renderEffectTable(summary.inactiveEffects, 'OFF中の遺物効果', 'OFF中の効果はありません。') +
     renderRateSummary(summary) +
-    renderRateTable(summary);
+    renderRateTable(summary, state);
   }
 
   function renderSettingsToggle(label, value, key, note) {
@@ -475,6 +510,7 @@
     var normalDungeonCost = dungeon ? dungeon.getDungeonCost(state, 'normal') : 10000;
     var goldenDungeonCost = dungeon ? dungeon.getDungeonCost(state, 'golden') : 100000;
     var dimensionalDungeonCost = dungeon ? dungeon.getDungeonCost(state, 'dimensional') : 1000000;
+    var voidDungeonCheck = dungeon && typeof dungeon.canEnterVoidDungeon === 'function' ? dungeon.canEnterVoidDungeon(state) : { ok: false, reason: 'ER虚無の遺物が必要です。' };
     var normalDungeonBaseCost = Math.floor(data.DUNGEON_TYPES.normal.cost * Math.pow(2, (state.dungeonRecords && state.dungeonRecords.enteredNormalDungeon) || 0));
     var goldenDungeonBaseCost = Math.floor(data.DUNGEON_TYPES.golden.cost * Math.pow(2, (state.dungeonRecords && state.dungeonRecords.enteredGoldenDungeon) || 0));
     var dimensionalDungeonBaseCost = Math.floor(data.DUNGEON_TYPES.dimensional.cost * Math.pow(2, (state.dungeonRecords && state.dungeonRecords.enteredDimensionalDungeon) || 0));
@@ -504,7 +540,8 @@
       '<button type="button" class="mini-button" data-altar-dungeon=\"normal\">通常 ' + escapeHtml(formatCostLabel(normalDungeonBaseCost, normalDungeonCost)) + '</button>' +
       '<button type="button" class="mini-button" data-altar-dungeon=\"golden\">黄金 ' + escapeHtml(formatCostLabel(goldenDungeonBaseCost, goldenDungeonCost)) + '</button>' +
       '<button type="button" class="mini-button" data-altar-dungeon=\"dimensional\">異次元 ' + escapeHtml(formatCostLabel(dimensionalDungeonBaseCost, dimensionalDungeonCost)) + '</button>' +
-    '</div></div>';
+      '<button type="button" class="mini-button" data-altar-dungeon=\"void\"' + (voidDungeonCheck.ok ? '' : ' disabled') + '>虚無のダンジョン</button>' +
+    '</div><p class="section-note">' + escapeHtml(voidDungeonCheck.ok ? '採掘は存在しない。戦闘だけが続く、何もないダンジョン。' : voidDungeonCheck.reason) + '</p></div>';
 
     var rebirthBlock = '<div class="box-block"><h3>0と転生</h3><div class="detail-grid">' +
       detailCell('0の遺物', zeroRelicState.owned ? '所持 / ' + (zeroRelicState.enabled ? 'ON' : 'OFF') : '未所持') +
@@ -520,6 +557,31 @@
       '<button type="button" class="mini-button" data-zero-relic-buy' + (zeroRelicState.purchasedThisLife ? ' disabled' : '') + '>0の遺物を購入する: ' + escapeHtml(formatCostLabel(100000, zeroRelicCost)) + '</button>' +
       '<button type="button" class="mini-button" data-rebirth-execute>転生する: ' + escapeHtml(formatCostLabel(10000, rebirthCost)) + '</button>' +
     '</div>') + '</div>';
+
+    var evolutionBlock = '';
+    if (!inDungeon) {
+      var evolutionRecipes = Array.isArray(data.EVOLUTION_RECIPES) ? data.EVOLUTION_RECIPES : [];
+      var canUseEvolutionUi = altar && typeof altar.canEvolveRelic === 'function';
+      evolutionBlock = '<div class="box-block"><h3>進化</h3>' + (evolutionRecipes.length ? evolutionRecipes.map(function (recipe) {
+        var fromRelic = data.RELIC_INDEX[recipe.from];
+        var toRelic = data.RELIC_INDEX[recipe.to];
+        var owned = state.ownedRelics[recipe.from];
+        var check = canUseEvolutionUi ? altar.canEvolveRelic(state, recipe.id) : { ok: false, reason: '進化機能を読み込み中です。' };
+        if (!fromRelic || !toRelic) {
+          return '';
+        }
+        return '<article class="relic-card"><div class="relic-head"><div><div class="inventory-name">' + escapeHtml(fromRelic.name + " → " + toRelic.name) + '</div><div class="relic-meta">所持数: ' + escapeHtml(owned ? owned.count : 0) + ' / 状態: ' + escapeHtml(owned ? (owned.enabled !== false ? 'ON' : 'OFF') : '未所持') + '</div></div><button type="button" class="mini-button" data-evolve-relic="' + escapeHtml(recipe.id) + '"' + (check.ok ? '' : ' disabled') + '>進化</button></div><div class="detail-row"><span class="detail-label">進化コスト</span><span class="detail-value">' + escapeHtml((recipe.cost || 0).toLocaleString('ja-JP')) + '</span></div><div class="detail-row"><span class="detail-label">状態</span><span class="detail-value">' + escapeHtml(check.ok ? '進化可能' : check.reason) + '</span></div></article>';
+      }).join('') : '<div class="empty-text">進化レシピはまだありません。</div>') + '</div>';
+    }
+
+    var voidBlock = '';
+    if (!inDungeon && altar && typeof altar.isVoidUnlocked === 'function' && altar.isVoidUnlocked(state)) {
+      voidBlock = '<div class="box-block"><h3>虚無</h3><div class="detail-grid">' +
+        detailCell('状態', '解放済み') +
+        detailCell('遭遇数', (state.voidState && state.voidState.encounters) || 0) +
+        detailCell('撃破数', (state.voidState && state.voidState.defeats) || 0) +
+      '</div><p class="section-note">無限のさらに奥に、何もない場所があります。</p><div class="toolbar"><button type="button" class="mini-button" data-void-challenge>虚無に挑む</button></div></div>';
+    }
 
     return '<div class="box-block"><h3>祭壇</h3><div class="detail-grid">' +
       detailCell('現在の石数', (state.stones || 0).toLocaleString('ja-JP')) +
@@ -540,7 +602,7 @@
       renderAltarRelicCard(state, summary, 'altar_lr_multi_100', 'LR回転する世界の遺物を獲得') +
       renderAltarRelicCard(state, summary, 'altar_lr_auto_start', 'LR自動起動の遺物を獲得') +
       renderAltarRelicCard(state, summary, 'altar_br_multiverse', 'BRマルチバースの遺物を獲得') +
-    '</div>');
+    '</div>') + evolutionBlock + voidBlock;
   }
 
   function renderBatchDrawButtons(state, summary) {
@@ -753,7 +815,7 @@
       '敵ランク ' + battleState.bugRank,
       '敵HP ' + (hiddenValue || (battleState.bugHp + ' / ' + battleState.bugMaxHp)),
       '敵攻撃 ' + (hiddenValue || battleState.bugAttack),
-      '敵防御 ' + (hiddenValue || battleState.bugDefense),
+      '敵防御 ' + (hiddenValue || (battleState.bugRank === '∞' && summary.infinityBugDefenseOverride !== null ? summary.infinityBugDefenseOverride : battleState.bugDefense)),
       '敵速度 ' + (hiddenValue || battleState.bugSpeed),
       '命中率 ' + formatPercent(battleStats.hitRate),
       '回避率 ' + formatPercent(battleStats.evasionRate),
@@ -769,13 +831,24 @@
 
   function renderNormalView(state, summary, activeMenu, uiState) {
     if (activeMenu === 'relics') {
-      return { title: '遺物一覧', html: renderRelicView(summary, uiState.relic), showBack: true };
+      return { title: '遺物一覧', html: renderRelicView(summary, uiState.relic, state), showBack: true };
     }
     if (activeMenu === 'status') {
       return { title: 'ステータス', html: renderStatusView(summary, state), showBack: true };
     }
     if (activeMenu === 'altar') {
-      return { title: '祭壇', html: renderAltarView(state, summary), showBack: true };
+      try {
+        return { title: '祭壇', html: renderAltarView(state, summary), showBack: true };
+      } catch (error) {
+        return {
+          title: '祭壇',
+          html: '<div class="box-block"><h3>祭壇</h3><p class="section-note">祭壇UIの描画中に問題が発生しました。</p><div class="detail-grid">' +
+            detailCell('現在の石数', (state.stones || 0).toLocaleString('ja-JP')) +
+            detailCell('祭壇効果', summary.altarEvent ? summary.altarEvent.effectName : 'なし') +
+          '</div><div class="detail-row"><span class="detail-label">詳細</span><span class="detail-value">' + escapeHtml(error && error.message ? error.message : 'unknown error') + '</span></div></div>',
+          showBack: true
+        };
+      }
     }
     if (activeMenu === 'decompose') {
       return { title: '分解', html: renderDecomposeView(summary, state, uiState.decompose), showBack: true };

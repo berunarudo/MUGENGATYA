@@ -130,6 +130,9 @@
     if (effects.isInfinityRelicEnabled(state)) {
       return false;
     }
+    if (state.battleState && state.battleState.isVoidBattle) {
+      return false;
+    }
     return activeMenu === "" || state.isBattle || state.pendingBugRank || dungeon.isInDungeon(state);
   }
 
@@ -143,6 +146,9 @@
     }
     if (effects.isInfinityRelicEnabled(state)) {
       return "危険操作を検知。";
+    }
+    if (state.battleState && state.battleState.isVoidBattle) {
+      return "虚無戦では自動起動できません。手動で戦ってください。";
     }
     if (activeMenu !== "" && !state.isBattle && !state.pendingBugRank && !dungeon.isInDungeon(state)) {
       return "操作対象外の画面のため、自動起動を停止しました。";
@@ -507,6 +513,9 @@
     if (effects.isInfinityRelicEnabled(state)) {
       return "危険操作のため、長押しを解除しました。";
     }
+    if (state.battleState && state.battleState.isVoidBattle) {
+      return "虚無戦では長押しできません。手動で戦ってください。";
+    }
     if (!state.isBattle && !state.pendingBugRank) {
       var summary = getSummary();
       var nextDrawCost = engine.getNextDrawCost(state, summary);
@@ -627,6 +636,25 @@
       persistAndRender();
       return;
     }
+    if (relicId === "zero_ending_relic") {
+      markPlayerActivity({ reason: "プレイヤー操作を検知。", keepAutoRunning: false });
+      state.permanentRelics.zero_ending_relic.enabled = !state.permanentRelics.zero_ending_relic.enabled;
+      pushLog("0終焉の遺物を" + (state.permanentRelics.zero_ending_relic.enabled ? "ON" : "OFF") + "にしました。");
+      persistAndRender();
+      return;
+    }
+    if (relicId === "if_random_relic") {
+      markPlayerActivity({ reason: "プレイヤー操作を検知。", keepAutoRunning: false });
+      state.permanentRelics.if_random_relic.enabled = !state.permanentRelics.if_random_relic.enabled;
+      if (!state.randomRelicState) {
+        state.randomRelicState = data.createRandomRelicState();
+      }
+      state.randomRelicState.owned = true;
+      state.randomRelicState.enabled = state.permanentRelics.if_random_relic.enabled;
+      pushLog("IF乱数の遺物を" + (state.permanentRelics.if_random_relic.enabled ? "ON" : "OFF") + "にしました。");
+      persistAndRender();
+      return;
+    }
     if (!state.ownedRelics[relicId]) {
       return;
     }
@@ -721,6 +749,35 @@
     var decomposeButton = event.target.closest("[data-decompose-action]");
     if (decomposeButton) {
       handleDecompose(decomposeButton.getAttribute("data-decompose-action"));
+      return;
+    }
+
+    var evolveButton = event.target.closest("[data-evolve-relic]");
+    if (evolveButton) {
+      if (dungeon.isInDungeon(state)) {
+        pushLog("ダンジョン中の祭壇は確認のみ可能です。");
+        persistAndRender();
+        return;
+      }
+      var evolveOutcome = altar.evolveRelic(state, evolveButton.getAttribute("data-evolve-relic"));
+      pushLogs(evolveOutcome.logs || []);
+      refreshAchievements();
+      persistAndRender();
+      return;
+    }
+
+    var voidButton = event.target.closest("[data-void-challenge]");
+    if (voidButton) {
+      if (dungeon.isInDungeon(state)) {
+        pushLog("ダンジョン中の祭壇は確認のみ可能です。");
+        persistAndRender();
+        return;
+      }
+      var voidOutcome = altar.challengeVoid(state);
+      pushLogs(voidOutcome.logs || []);
+      activeMenu = "";
+      refreshAchievements();
+      persistAndRender();
       return;
     }
 
@@ -872,6 +929,17 @@
     }
     if (event.target.matches("[data-achievement-sort]")) {
       uiState.achievements.sort = event.target.value;
+      persistAndRender();
+      return;
+    }
+    if (event.target.matches("[data-random-relic-rank]")) {
+      if (!state.randomRelicState) {
+        state.randomRelicState = data.createRandomRelicState();
+      }
+      var beforeRank = state.randomRelicState.selectedRank || "ER";
+      state.randomRelicState.selectedRank = event.target.value;
+      pushLog("操作対象ランクを変更しました。");
+      pushLog(beforeRank + " → " + state.randomRelicState.selectedRank);
       persistAndRender();
     }
   }

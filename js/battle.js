@@ -45,9 +45,10 @@
       speed: bug.speed,
       rewardMin: bug.rewardMin,
       rewardMax: bug.rewardMax,
-      isBoss: ["SSSR", "UR", "AR", "LR", "GR", "BR", "QR", "IR", "ER"].indexOf(configOrRank) !== -1,
+      isBoss: ["SSSR", "UR", "AR", "LR", "GR", "BR", "QR", "IR", "ER", "∞"].indexOf(configOrRank) !== -1,
       isSlimeBattle: false,
       isInfinitySlime: false,
+      isVoidBattle: false,
       hideStats: false
     };
   }
@@ -116,6 +117,15 @@
     return null;
   }
 
+  function isInfinityBugUnlocked(state) {
+    return Boolean(
+      state.infinityBugUnlocked === true ||
+      (state.ownedRelics && state.ownedRelics.er_infinity_gate) ||
+      state.ifUnlocked === true ||
+      state.observedIfProbability === true
+    );
+  }
+
   function updateHighestObservedRank(state, rank) {
     if (!state.highestObservedRank || data.isRankAtLeast(rank, state.highestObservedRank)) {
       state.highestObservedRank = rank;
@@ -141,10 +151,171 @@
       isBoss: config.isBoss === true,
       isSlimeBattle: config.isSlimeBattle === true,
       isInfinitySlime: config.isInfinitySlime === true,
+      isVoidBattle: config.isVoidBattle === true,
+      isVoidSlimeBattle: config.isVoidSlimeBattle === true,
+      isRandomGodBattle: config.isRandomGodBattle === true,
       hideStats: config.hideStats === true,
       rewardMin: config.rewardMin || 0,
-      rewardMax: config.rewardMax || 0
+      rewardMax: config.rewardMax || 0,
+      voidActionCount: 0,
+      playerActionCount: 0
     };
+  }
+
+  function pickWeightedAction(actions) {
+    var total = actions.reduce(function (sum, action) {
+      return sum + action.weight;
+    }, 0);
+    var roll = Math.random() * total;
+    var current = 0;
+    for (var i = 0; i < actions.length; i += 1) {
+      current += actions[i].weight;
+      if (roll < current) {
+        return actions[i];
+      }
+    }
+    return actions[actions.length - 1];
+  }
+
+  function grantRandomRelic(state, logs) {
+    if (!state.permanentRelics) {
+      state.permanentRelics = data.createPermanentRelics();
+    }
+    if (!state.randomRelicState) {
+      state.randomRelicState = data.createRandomRelicState();
+    }
+    if (!state.permanentRelics.if_random_relic.owned) {
+      state.permanentRelics.if_random_relic.owned = true;
+      state.permanentRelics.if_random_relic.enabled = true;
+      state.randomRelicState.owned = true;
+      state.randomRelicState.enabled = true;
+      if (state.discoveredRelics.indexOf("if_random_relic") === -1) {
+        state.discoveredRelics.push("if_random_relic");
+      }
+      logs.push("IF乱数の遺物を獲得。");
+      return;
+    }
+    state.randomRelicState.owned = true;
+    state.randomRelicState.enabled = true;
+    logs.push("IF乱数の遺物はすでに所持している。");
+  }
+
+  function applyVoidLikeEnemyTurn(state, battleState, battleStats) {
+    state.voidBattleState.voidActionCount += 1;
+    battleState.voidActionCount = state.voidBattleState.voidActionCount;
+    if (battleState.voidActionCount % data.VOID_BOSS.healEvery === 0) {
+      var healAmount = Math.floor(battleState.bugMaxHp * data.VOID_BOSS.healRate);
+      battleState.bugHp = Math.min(battleState.bugMaxHp, battleState.bugHp + healAmount);
+      addBattleLog(state, battleState.isVoidSlimeBattle ? battleState.bugName + "が欠落を埋めた。" : "虚無が、自身の欠落を埋めた。");
+      addBattleLog(state, (battleState.isVoidSlimeBattle ? battleState.bugName : "虚無") + "のHPが大幅に回復した。");
+    }
+    if (battleState.voidActionCount % data.VOID_BOSS.specialStatLossEvery === 0) {
+      var losses = effects.calculateVoidStatLoss(state, battleStats.playerStats);
+      effects.reduceVoidStatLoss(state, losses);
+      state.specialFlags.voidStatLossTaken = true;
+      addBattleLog(state, battleState.bugName + "の攻撃が、存在を削った。");
+      if (state.ownedRelics && state.ownedRelics.er_void_relic && state.ownedRelics.er_void_relic.enabled !== false) {
+        addBattleLog(state, "ER虚無の遺物が侵食を抑え込んだ。");
+        addBattleLog(state, "全ステータスの減少は1になった。");
+      } else {
+        addBattleLog(state, "全ステータスが大幅に減少した。");
+        addBattleLog(state, "減少したステータスは戦闘終了後も戻りません。");
+      }
+      battleState.turn += 1;
+      return true;
+    }
+    return false;
+  }
+
+  function executeRandomGodAction(state, battleState) {
+    var action = pickWeightedAction(data.RANDOM_GOD_ACTIONS);
+    var battleStats = effects.calculateBattleStats(state);
+    state.voidBattleState.randomGodActionCount += 1;
+    if (action.id === "blessing") {
+      addBattleLog(state, "乱数の神は、乱数の洗礼を放った。");
+      return false;
+    }
+    if (action.id === "breath") {
+      battleState.bugHp = battleState.bugMaxHp;
+      addBattleLog(state, "乱数の神は、乱数の息吹を吐いた。");
+      addBattleLog(state, "乱数の神のHPが全回復した。");
+      return true;
+    }
+    if (action.id === "rage") {
+      battleState.playerHp = Math.max(1, Math.floor(battleState.playerHp / 2));
+      addBattleLog(state, "乱数の神は怒った。");
+      addBattleLog(state, "プレイヤーのHPが半分になった。");
+      return true;
+    }
+    if (action.id === "smile") {
+      battleState.playerHp = battleState.playerMaxHp;
+      addBattleLog(state, "乱数の神が微笑んだ。");
+      addBattleLog(state, "なぜか、プレイヤーのHPが全回復した。");
+      return true;
+    }
+    if (action.id === "power") {
+      battleState.bugAttack = Math.floor(battleState.bugAttack * 1.1);
+      battleState.bugDefense = Math.floor(battleState.bugDefense * 1.1);
+      battleState.bugSpeed = Math.floor(battleState.bugSpeed * 1.1);
+      battleState.bugMaxHp = Math.floor(battleState.bugMaxHp * 1.1);
+      battleState.bugHp = Math.min(battleState.bugMaxHp, Math.floor(battleState.bugHp * 1.1));
+      addBattleLog(state, "乱数の神の力が増した。");
+      addBattleLog(state, "全ステータスが上昇した。");
+      return true;
+    }
+    if (action.id === "weakness") {
+      var losses = effects.calculateVoidStatLoss(state, battleStats.playerStats);
+      effects.reduceVoidStatLoss(state, losses);
+      state.specialFlags.voidStatLossTaken = true;
+      addBattleLog(state, "乱数が崩れた。");
+      addBattleLog(state, "プレイヤーの全ステータスが減少した。");
+      return true;
+    }
+    if (action.id === "judgment") {
+      state.randomGodRecords.sawJudgment = true;
+      state.specialFlags.randomGodJudgmentSeen = true;
+      battleState.playerHp = 0;
+      addBattleLog(state, "乱数の神は、乱数の裁きを下した。");
+      addBattleLog(state, "プレイヤーのHPが0になった。");
+      return true;
+    }
+    if (action.id === "reset") {
+      state.randomGodRecords.sawReset = true;
+      state.specialFlags.randomGodResetSeen = true;
+      battleState.playerHp = state.voidBattleState.initialPlayerMaxHp;
+      battleState.playerMaxHp = state.voidBattleState.initialPlayerMaxHp;
+      battleState.bugHp = state.voidBattleState.initialEnemyMaxHp;
+      battleState.bugMaxHp = state.voidBattleState.initialEnemyMaxHp;
+      battleState.bugAttack = state.voidBattleState.initialEnemyAttack || battleState.bugAttack;
+      battleState.bugDefense = state.voidBattleState.initialEnemyDefense || battleState.bugDefense;
+      battleState.bugSpeed = state.voidBattleState.initialEnemySpeed || battleState.bugSpeed;
+      battleState.turn = 1;
+      state.voidBattleState.voidActionCount = 0;
+      addBattleLog(state, "乱数が巻き戻った。");
+      addBattleLog(state, "戦闘開始時点まで戻された。");
+      return true;
+    }
+    if (action.id === "needle") {
+      var needleDamage = Math.max(1, Math.floor(effects.calculateBugDamage(state, battleState) * 3));
+      battleState.playerHp = Math.max(0, battleState.playerHp - needleDamage);
+      addBattleLog(state, "乱数の針が突き刺さった。");
+      addBattleLog(state, "大ダメージを受けた。");
+      return true;
+    }
+    if (action.id === "random") {
+      var randomDamage = Math.max(1, Math.floor(battleState.bugMaxHp * 0.3));
+      if (Math.random() < 0.5) {
+        battleState.playerHp = Math.max(0, battleState.playerHp - randomDamage);
+        addBattleLog(state, "乱数が跳ねた。");
+        addBattleLog(state, "プレイヤーに大ダメージ。");
+      } else {
+        battleState.bugHp = Math.max(0, battleState.bugHp - randomDamage);
+        addBattleLog(state, "乱数が反転した。");
+        addBattleLog(state, "乱数の神に大ダメージ。");
+      }
+      return true;
+    }
+    return false;
   }
 
   function addBattleLog(state, message) {
@@ -254,6 +425,9 @@
       logs.push("ER無限への門を開いた者の遺物により、未観測だった確率が表示された。");
       logs.push("IF: 0.0000000000000000000000000000001%");
       state.observedIfProbability = true;
+      state.infinityBugUnlocked = true;
+      logs.push("ER無限の門を開いた者の遺物が、さらに奥の接続を開いた。");
+      logs.push("∞バグが出現するようになりました。");
     }
   }
 
@@ -359,11 +533,54 @@
       state.pendingBugSourceRank = null;
       return logs;
     }
+    if ((battleState.isVoidSlimeBattle || battleState.isRandomGodBattle) && dungeon) {
+      Array.prototype.push.apply(logs, dungeon.finishVoidDungeonBattleWin(state, battleState));
+      if (battleState.isRandomGodBattle) {
+        state.stones += 10000000000;
+        grantRandomRelic(state, logs);
+        state.isBattle = false;
+        state.battleState = null;
+      } else if (state.battleState === battleState) {
+        state.isBattle = false;
+        state.battleState = null;
+      }
+      state.pendingBugSourceRank = null;
+      return logs;
+    }
+    if (battleState.isVoidBattle) {
+      state.voidState.isInVoidBattle = false;
+      state.voidState.defeats += 1;
+      if (state.voidState.firstDefeatedAt == null) {
+        state.voidState.firstDefeatedAt = Date.now();
+      }
+      state.stones += 10000000000;
+      logs.push("虚無を撃破した。");
+      logs.push("何もなかった場所に、終わりが生まれた。");
+      logs.push("実績「虚無を超えた者」を解除。");
+      logs.push("石を10,000,000,000個獲得。");
+      grantZeroEndingRelic(state, logs);
+      state.specialLogUnlocked = true;
+      state.isBattle = false;
+      state.battleState = null;
+      state.pendingBugSourceRank = null;
+      return logs;
+    }
 
     updateHighestObservedRank(state, rank);
     giveBugReward(state, battleState, logs);
     state.defeatedBugCounts[rank] = (state.defeatedBugCounts[rank] || 0) + 1;
     state.totalBugDefeats += 1;
+    if (rank === "∞") {
+      state.infinityBugRecords.encounters = Math.max(state.infinityBugRecords.encounters || 0, 1);
+      state.infinityBugRecords.defeats = (state.infinityBugRecords.defeats || 0) + 1;
+      if (state.infinityBugRecords.firstDefeatedAt == null) {
+        state.infinityBugRecords.firstDefeatedAt = Date.now();
+      }
+      logs.push("∞バグを撃破した。");
+      logs.push("終わらないノイズが、有限の形を取った。");
+      engine.acquireRelic(state, "infinity_finite_relic", logs);
+      logs.push("ガチャを引くたびに、∞の確率が上昇するようになりました。");
+    }
     increaseBugDefeatRateBonus(state, rank, logs);
     rollBugRelicDrop(state, rank, logs);
 
@@ -373,6 +590,23 @@
 
     checkSpecialBugFlags(state, rank);
     unlockNextBugRank(state, rank, logs);
+    if (state.ownedRelics && state.ownedRelics.er_creation && state.ownedRelics.er_creation.enabled !== false) {
+      var gain = effects.calculateCreationRelicStatGain(rank);
+      if (gain > 0) {
+        var target = state.creationRelicStatBonus;
+        target.hp += gain;
+        target.attack += gain;
+        target.defense += gain;
+        target.speed += gain;
+        target.luck += gain;
+        target.accuracy += gain;
+        target.evasionRate += gain;
+        target.criticalRate += gain;
+        target.criticalDamage += gain;
+        logs.push("ER創造の遺物が世界を再構築した。");
+        logs.push("全ステータスが" + gain.toLocaleString("ja-JP") + "上昇した。");
+      }
+    }
 
     state.isBattle = false;
     state.battleState = null;
@@ -391,6 +625,18 @@
 
     if (battleState.isSlimeBattle && dungeon) {
       Array.prototype.push.apply(logs, dungeon.finishSlimeLose(state, battleState));
+      return logs;
+    }
+
+    if ((battleState.isVoidSlimeBattle || battleState.isRandomGodBattle) && dungeon) {
+      Array.prototype.push.apply(logs, dungeon.finishVoidDungeonLose(state, battleState));
+      return logs;
+    }
+
+    if (battleState.isVoidBattle) {
+      logs.push("虚無に敗北した。");
+      logs.push("あなたは何も失わなかった。");
+      logs.push("ただし、削られた存在は戻らない。");
       return logs;
     }
 
@@ -424,6 +670,37 @@
     var enemyConfig = createEnemyConfig(configOrRank);
     state.battleState = createBattleState(enemyConfig, battleStats);
     state.isBattle = true;
+    if (!state.voidBattleState) {
+      state.voidBattleState = data.createVoidBattleState();
+    }
+    state.voidBattleState.turnCount = 0;
+    state.voidBattleState.voidActionCount = 0;
+    state.voidBattleState.playerActionCount = 0;
+    state.voidBattleState.randomGodActionCount = 0;
+    state.voidBattleState.initialPlayerMaxHp = state.battleState.playerMaxHp;
+    state.voidBattleState.initialEnemyMaxHp = state.battleState.bugMaxHp;
+    state.voidBattleState.initialEnemyAttack = state.battleState.bugAttack;
+    state.voidBattleState.initialEnemyDefense = state.battleState.bugDefense;
+    state.voidBattleState.initialEnemySpeed = state.battleState.bugSpeed;
+    if (enemyConfig.rank === "∞") {
+      state.infinityBugRecords.encounters = (state.infinityBugRecords.encounters || 0) + 1;
+      addBattleLog(state, "接続が終端を超えた。");
+      addBattleLog(state, "∞バグが出現した。");
+      if (effects.calculateInfinityBugDefenseOverride(state) !== null) {
+        addBattleLog(state, "ER絶剣の遺物が、∞バグの防御式を切断した。");
+        addBattleLog(state, "∞バグの防御力が1になった。");
+      }
+    } else if (enemyConfig.isVoidBattle) {
+      addBattleLog(state, "祭壇が音を失った。");
+      addBattleLog(state, enemyConfig.name + "が現れた。");
+      addBattleLog(state, "それは、何も存在しない敵だった。");
+      if (enemyConfig.isRandomGodBattle) {
+        addBattleLog(state, "この戦闘では、次に何が起こるか誰にも分からない。");
+      } else {
+        addBattleLog(state, "虚無の数値は読めない。");
+        addBattleLog(state, "ただ、∞バグより遥かに大きいことだけは分かる。");
+      }
+    }
 
     if (!enemyConfig.isSlimeBattle && state.pendingBugSourceRank && state.pendingBugSourceRank !== enemyConfig.rank) {
       addBattleLog(state, "高位の遺物効果により、" + state.pendingBugSourceRank + "バグは" + enemyConfig.rank + "バグへ変質した。");
@@ -447,6 +724,9 @@
     var dungeon = getDungeon();
     var battleStats = effects.calculateBattleStats(state);
     addBattleLog(state, "ターン" + battleState.turn + "開始。");
+    if (battleState.isVoidBattle) {
+      state.voidBattleState.turnCount += 1;
+    }
 
     for (var i = 0; i < battleStats.attackCount; i += 1) {
       if (battleState.bugHp <= 0) {
@@ -473,6 +753,9 @@
 
       battleState.bugHp = Math.max(0, battleState.bugHp - damage);
       addBattleLog(state, battleState.bugName + "に" + damage + "ダメージ。");
+      if (battleState.isVoidBattle) {
+        state.voidBattleState.playerActionCount += 1;
+      }
 
       if (battleState.isInfinitySlime && dungeon && dungeon.canDamageInfinitySlime(state) && battleState.hideStats) {
         battleState.hideStats = false;
@@ -482,6 +765,23 @@
 
       if (checkBattleWin(state)) {
         return { logs: finishBattleWin(state) };
+      }
+    }
+
+    if (battleState.isRandomGodBattle) {
+      if (executeRandomGodAction(state, battleState)) {
+        if (checkBattleWin(state)) {
+          return { logs: finishBattleWin(state) };
+        }
+        if (checkBattleLose(state)) {
+          return { logs: finishBattleLose(state) };
+        }
+        battleState.turn += 1;
+        return { logs: [] };
+      }
+    } else if (battleState.isVoidBattle) {
+      if (applyVoidLikeEnemyTurn(state, battleState, battleStats)) {
+        return { logs: [] };
       }
     }
 
@@ -531,6 +831,9 @@
     var rankModifier = effects.calculateBugRankModifier(state);
     var allowPastUnlock = !state.settings || state.settings.allowRankBoostPastUnlock !== false;
     var finalRank = getRaisedBugRank(state, baseRank, rankModifier, allowPastUnlock);
+    if (isInfinityBugUnlocked(state) && (Math.random() < 0.01 || (rankModifier > 0 && finalRank === "ER" && Math.random() < 0.05))) {
+      finalRank = "∞";
+    }
 
     registerBugSpawn(state);
 
@@ -551,11 +854,35 @@
     return startBattle(state, rank);
   }
 
+  function grantZeroEndingRelic(state, logs) {
+    if (!state.permanentRelics) {
+      state.permanentRelics = data.createPermanentRelics();
+    }
+    var relic = state.permanentRelics.zero_ending_relic;
+    if (!relic.owned) {
+      relic.owned = true;
+      relic.enabled = true;
+      relic.count = 1;
+      relic.limitBreak = 0;
+      if (state.discoveredRelics.indexOf("zero_ending_relic") === -1) {
+        state.discoveredRelics.push("zero_ending_relic");
+      }
+      logs.push("0終焉の遺物を獲得。");
+      logs.push("すべての確率は、最低1%を持つようになった。");
+      return;
+    }
+    relic.count += 1;
+    relic.limitBreak = Math.max(0, relic.count - 1);
+    logs.push("0終焉の遺物が重なった。");
+    logs.push("最低基礎確率が上昇した。");
+  }
+
   window.InfinityGachaBattle = {
     startBattle: startBattle,
     playerAttack: playerAttack,
     rollBugSpawn: rollBugSpawn,
-    handlePendingBug: handlePendingBug
+    handlePendingBug: handlePendingBug,
+    grantZeroEndingRelic: grantZeroEndingRelic,
+    grantRandomRelic: grantRandomRelic
   };
 })();
-

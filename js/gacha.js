@@ -114,8 +114,15 @@
     return "MISS";
   }
 
-  function rollRank(summary) {
-    return rollRankFromRows(summary.rateTable.rows);
+  function rollRank(summary, state) {
+    var rows = summary.rateTable.rows.map(function (row) {
+      var bonus = state && state.randomRateGrowthByShard ? (state.randomRateGrowthByShard[row.rank] || 0) : 0;
+      return {
+        rank: row.rank,
+        final: row.final + bonus
+      };
+    });
+    return rollRankFromRows(rows);
   }
 
   function isBrOrHigher(rank) {
@@ -177,6 +184,7 @@
       state.bugLimitedRelicObtained.ER = true;
       state.limitedRelicDiscovered.er_infinity_gate = true;
       state.ifUnlocked = true;
+      state.infinityBugUnlocked = true;
     }
   }
 
@@ -186,6 +194,37 @@
       state.observedIfProbability = true;
       logs.push("ER到達条件を満たした。遺物画面により、極低確率が表示された。");
       logs.push("IF: " + ifInfo.probabilityText);
+    }
+  }
+
+  function ensureRandomRateGrowthMap(state) {
+    if (!state.randomRateGrowthByShard || typeof state.randomRateGrowthByShard !== "object") {
+      state.randomRateGrowthByShard = {};
+    }
+    (data.INFINITY_RATE_RANKS || []).forEach(function (rank) {
+      if (typeof state.randomRateGrowthByShard[rank] !== "number") {
+        state.randomRateGrowthByShard[rank] = 0;
+      }
+    });
+  }
+
+  function applyPerDrawGrowth(state, summary, logs, options) {
+    options = options || {};
+    ensureRandomRateGrowthMap(state);
+
+    var finiteGrowth = summary.finiteRelicGrowthPerGacha || 0;
+    if (finiteGrowth > 0) {
+      state.infinityRateGrowth = Math.max(0, (state.infinityRateGrowth || 0) + finiteGrowth);
+      if (!options.silentLog) {
+        logs.push("有限の遺物により、∞確率が上昇した。");
+        logs.push("現在の∞確率上昇量：" + effects.formatRateDisplay(state.infinityRateGrowth));
+      }
+    }
+
+    var shardGrowth = summary.shardRandomRateGrowthPerGacha || 0;
+    if (shardGrowth > 0 && data.INFINITY_RATE_RANKS && data.INFINITY_RATE_RANKS.length) {
+      var rank = randomPick(data.INFINITY_RATE_RANKS);
+      state.randomRateGrowthByShard[rank] = Math.max(0, (state.randomRateGrowthByShard[rank] || 0) + shardGrowth);
     }
   }
 
@@ -224,6 +263,11 @@
     if (relicId === "if_infinity") {
       state.ifRelicObtained = true;
       state.specialLogUnlocked = true;
+      if (state.voidState) {
+        state.voidState.unlocked = true;
+      }
+    } else if (relicId === "infinity_finite_relic") {
+      state.infinityBugUnlocked = true;
     }
 
     if (["UR", "AR", "LR", "GR", "BR", "QR", "IR", "ER"].indexOf(relic.rank) !== -1) {
@@ -238,6 +282,8 @@
         logs.push("ログの奥から、まだ存在しない文字列が浮かび上がった。");
         logs.push("無限の遺物をOFF状態で保管しました。");
         logs.push("この遺物は自動では起動しません。");
+      } else if (relicId === "infinity_finite_relic") {
+        logs.push(nextCount > 1 ? "有限の遺物が重なった。" : "有限の遺物を獲得。");
       } else {
         logs.push((prefix ? prefix : "") + relicName + "を獲得。");
       }
@@ -324,12 +370,12 @@
 
     if (rerolls.erRate > 0 && Math.random() < rerolls.erRate) {
       logs.push("ER系効果により、ハズレが再抽選された。");
-      return rollRank(summary);
+      return rollRank(summary, state);
     }
 
     if (rerolls.irRate > 0 && Math.random() < rerolls.irRate) {
       logs.push("IR系効果により、ハズレが強化再抽選された。");
-      return rollRank(summary);
+      return rollRank(summary, state);
     }
 
     if (rerolls.qrRate > 0 && Math.random() < rerolls.qrRate) {
@@ -340,7 +386,7 @@
     if (rerolls.brRate > 0 && Math.random() < rerolls.brRate) {
       logs.push("BR系効果により、ハズレを拒絶した。");
       logs.push("再抽選を行います。");
-      var brRank = rollRank(summary);
+      var brRank = rollRank(summary, state);
       if (brRank === "MISS" && rerolls.rerollFailStone > 0) {
         state.stones += rerolls.rerollFailStone;
         logs.push("再抽選でも何も出なかった。石を" + rerolls.rerollFailStone + "個獲得。");
@@ -357,7 +403,7 @@
     if (rerolls.lrRate > 0 && Math.random() < rerolls.lrRate) {
       logs.push("LR系効果により、ハズレをなかったことにした。");
       logs.push("再抽選を行います。");
-      return rollRank(summary);
+      return rollRank(summary, state);
     }
 
     if (rerolls.arRate > 0 && Math.random() < rerolls.arRate) {
@@ -439,10 +485,15 @@
   function performSingleDraw(state, summary, logs, options) {
     options = options || {};
     state.totalGachaCount += 1;
+    applyPerDrawGrowth(state, summary, logs, { silentLog: options.silent || state.totalGachaCount % 100 !== 0 });
     var beforeDiscovered = state.discoveredRelics.slice();
-    var rankKey = summary.ifInfo && summary.ifInfo.drawEnabled && Math.random() * 100 < summary.ifInfo.rate
+    var infinityInfo = effects.calculateInfinityRateInfo(state);
+    var infinityRandomMultiplier = effects.calculateRandomRelicRateMultiplier(state, "IF");
+    var infinityDisplayMultiplier = effects.calculateRandomRelicRateMultiplier(state, "∞");
+    var effectiveInfinityRate = infinityInfo && infinityInfo.unlocked ? (infinityInfo.final * Math.max(infinityRandomMultiplier, infinityDisplayMultiplier)) : 0;
+    var rankKey = infinityInfo && infinityInfo.unlocked && Math.random() * 100 < effectiveInfinityRate
       ? "IF"
-      : rollRank(summary);
+      : rollRank(summary, state);
 
     var result = {
       rankKey: rankKey,
